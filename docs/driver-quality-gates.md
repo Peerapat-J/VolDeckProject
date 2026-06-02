@@ -59,8 +59,11 @@ release-quality milestones, test on real macOS hardware:
 
 - M2: contract tests and static guard are required; runtime privacy checks are
   recorded manually.
-- M3-M5: pass-through, session mapping, and mixer changes must extend contract
-  tests before changing driver behavior.
+- M3: helper lifecycle, HAL-to-helper buffering, output restore, and buffer
+  diagnostics must be tested or explicitly deferred before pass-through is
+  treated as safe.
+- M4-M5: session mapping and mixer changes must extend contract tests before
+  changing driver behavior.
 - M7: installer, uninstaller, reset, and recovery flows need runtime integration
   tests on real macOS hardware or a self-hosted runner.
 - M9: private alpha cannot proceed until all manual runtime gates have dated

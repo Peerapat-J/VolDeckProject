@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarRootView: View {
     @ObservedObject var preferences: AppPreferences
+    @ObservedObject var outputHelper: OutputHelperController
     @Environment(\.openSettings) private var openSettings
 
     private let outputOptions = [
@@ -34,7 +35,7 @@ struct MenuBarRootView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("VolDeck")
                     .font(.headline)
-                Text("Preview mixer shell")
+                Text("Helper \(outputHelper.state.rawValue)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -109,5 +110,5 @@ struct MenuBarRootView: View {
 }
 
 #Preview {
-    MenuBarRootView(preferences: AppPreferences())
+    MenuBarRootView(preferences: AppPreferences(), outputHelper: OutputHelperController())
 }

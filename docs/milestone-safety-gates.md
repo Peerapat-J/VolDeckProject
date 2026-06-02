@@ -44,6 +44,9 @@ leave the user with no sound, so every milestone has a safety gate.
 
 ## M3 Required Pass/Fail Checks
 
+Track the active M3 issue set and detailed pass-through checklist in
+`m3-output-pass-through.md`.
+
 - [ ] Audio plays through the selected real output.
 - [ ] Helper health is visible.
 - [ ] Helper crash does not strand the user silently.
