@@ -73,13 +73,15 @@ path.
 
 ## Follow-up Work
 
-- [ ] #12 Create minimal virtual output device
-- [ ] #13 Publish VolDeck as output-only device
-- [ ] #15 Verify no virtual input, no mic permission, no indicator
-- [ ] #16 Document development install and uninstall for HAL plugin
+- [x] #12 Create minimal virtual output device
+- [x] #13 Publish VolDeck as output-only device
+- [ ] #15 Verify no virtual input, no mic permission, no indicator after installing the development driver
+- [x] #16 Document development install and uninstall for HAL plugin
 
 ## References
 
 - docs/architecture-comparison.md
 - docs/privacy-principles.md
 - docs/market-benchmark.md
+- docs/m2-virtual-output-device.md
+- docs/hal-plugin-development.md
