@@ -59,7 +59,12 @@ private func runHelper() -> Int32 {
     let startedAt = Date()
 
     Thread.detachNewThread {
-        while let line = readLine() {
+        while true {
+            guard let line = readLine() else {
+                stopFlag.requestStop()
+                break
+            }
+
             if line.contains(#""stop""#) {
                 stopFlag.requestStop()
                 break

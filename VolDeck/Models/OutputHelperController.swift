@@ -19,6 +19,8 @@ final class OutputHelperController: ObservableObject {
 
     private var process: Process?
     private var standardInput: Pipe?
+    private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
     private var outputBuffer = ""
     private var expectedTermination = false
     private var terminationObserver: NSObjectProtocol?
@@ -87,6 +89,8 @@ final class OutputHelperController: ObservableObject {
         helperLocation = helperURL.path
         expectedTermination = false
         standardInput = inputPipe
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
 
         outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -127,6 +131,8 @@ final class OutputHelperController: ObservableObject {
             errorPipe.fileHandleForReading.readabilityHandler = nil
             process = nil
             standardInput = nil
+            self.outputPipe = nil
+            self.errorPipe = nil
             processID = nil
             state = .error
             lastMessage = "Could not start helper: \(error.localizedDescription)"
@@ -145,8 +151,10 @@ final class OutputHelperController: ObservableObject {
         state = .stopping
         lastMessage = "Stopping helper"
 
-        if let command = #"{"command":"stop"}"#.appending("\n").data(using: .utf8) {
-            standardInput?.fileHandleForWriting.write(command)
+        if process.isRunning,
+           let inputHandle = standardInput?.fileHandleForWriting,
+           let command = #"{"command":"stop"}"#.appending("\n").data(using: .utf8) {
+            try? inputHandle.write(contentsOf: command)
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self, weak process] in
@@ -213,12 +221,16 @@ final class OutputHelperController: ObservableObject {
     }
 
     private func handleTermination(_ terminatedProcess: Process) {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
         terminatedProcess.standardOutput = nil
         terminatedProcess.standardError = nil
         terminatedProcess.standardInput = nil
 
         process = nil
         standardInput = nil
+        outputPipe = nil
+        errorPipe = nil
         outputBuffer = ""
         processID = nil
 
