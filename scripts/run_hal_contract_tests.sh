@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-build_root="${BUILD_ROOT:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/VolDeckHALContractTests}"
+build_parent="${BUILD_ROOT:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}}"
+build_root="${build_parent%/}/VolDeckHALContractTests"
 
 /bin/rm -rf "$build_root"
 

@@ -2,6 +2,11 @@
 set -eu
 
 failure_count=0
+matches_file="$(mktemp)" || {
+  printf '%s\n' 'Unable to create temporary match file for HAL safety guard.' >&2
+  exit 1
+}
+trap 'rm -f "$matches_file"' EXIT
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -13,8 +18,8 @@ assert_no_match() {
   path="$2"
   message="$3"
 
-  if /usr/bin/grep -R -n -E "$pattern" "$path" >/tmp/voldeck-hal-guard.matches 2>/dev/null; then
-    /bin/cat /tmp/voldeck-hal-guard.matches >&2
+  if /usr/bin/grep -R -n -E "$pattern" "$path" >"$matches_file" 2>/dev/null; then
+    /bin/cat "$matches_file" >&2
     fail "$message"
   fi
 }
@@ -34,6 +39,7 @@ assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescriptio
 assert_no_match 'ScreenCaptureKit|AVCapture|CGRequestScreenCaptureAccess|CGPreflightScreenCaptureAccess|AudioHardwareCreate(ProcessTap|AggregateDevice)|CATapDescription' 'VolDeckHALPlugin' 'HAL plugin must not use capture-oriented APIs in the M2 output-only path.'
 assert_no_match 'AudioObject(Get|Set)PropertyData|AudioDevice(Start|Stop|CreateIOProcID)' 'VolDeckHALPlugin' 'AudioServerPlugIn code must not call HAL client APIs from inside the plugin host.'
 assert_no_match 'kAudioStreamTerminalType(HeadsetMicrophone|ReceiverMicrophone|Microphone)' 'VolDeckHALPlugin' 'HAL plugin must not publish microphone terminal types.'
+assert_no_match 'NSURLSession|dataTaskWithURL|URLSession|NSURL|CFNetwork|Network\.framework|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_perform' 'VolDeckHALPlugin' 'HAL plugin must not use network APIs or frameworks in the M2 output-only path.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'
 assert_plist_key_absent 'AudioServerPlugIn_Network' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare network access.'

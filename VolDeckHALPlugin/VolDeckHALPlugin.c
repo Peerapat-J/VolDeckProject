@@ -14,6 +14,7 @@ enum {
 enum {
     kVolDeckHALStereoChannels = 2,
     kVolDeckHALBitsPerChannel = 32,
+    kVolDeckHALDefaultSampleRate = 48000,
     kVolDeckHALDefaultBufferFrames = 512,
     kVolDeckHALMinimumBufferFrames = 32,
     kVolDeckHALMaximumBufferFrames = 4096,
@@ -26,7 +27,7 @@ static atomic_uint gVolDeckHALRunningClientCount = 0;
 static _Atomic(UInt64) gVolDeckHALStartHostTime = 0;
 static _Atomic(UInt64) gVolDeckHALClockSeed = 1;
 static _Atomic(UInt32) gVolDeckHALBufferFrameSize = kVolDeckHALDefaultBufferFrames;
-static _Atomic(UInt64) gVolDeckHALNominalSampleRate = 48000;
+static _Atomic(UInt64) gVolDeckHALNominalSampleRate = kVolDeckHALDefaultSampleRate;
 
 static HRESULT STDMETHODCALLTYPE VolDeckHALQueryInterface(void *inDriver, REFIID inUUID, LPVOID *outInterface);
 static ULONG STDMETHODCALLTYPE VolDeckHALAddRef(void *inDriver);
@@ -300,6 +301,27 @@ static void VolDeckHALNotifyDeviceProperty(AudioObjectPropertySelector selector)
     gVolDeckHALHost->PropertiesChanged(gVolDeckHALHost, kVolDeckHALDeviceObjectID, 1, &address);
 }
 
+static void VolDeckHALNotifyStreamProperty(AudioObjectPropertySelector selector)
+{
+    if (gVolDeckHALHost == NULL || gVolDeckHALHost->PropertiesChanged == NULL) {
+        return;
+    }
+
+    AudioObjectPropertyAddress address = {
+        selector,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain,
+    };
+    gVolDeckHALHost->PropertiesChanged(gVolDeckHALHost, kVolDeckHALOutputStreamObjectID, 1, &address);
+}
+
+static void VolDeckHALNotifySampleRateProperties(void)
+{
+    VolDeckHALNotifyStreamProperty(kAudioStreamPropertyVirtualFormat);
+    VolDeckHALNotifyStreamProperty(kAudioStreamPropertyPhysicalFormat);
+    VolDeckHALNotifyDeviceProperty(kAudioDevicePropertyNominalSampleRate);
+}
+
 void *VolDeckHALPluginFactory(CFAllocatorRef allocator, CFUUIDRef requestedTypeUUID)
 {
     (void)allocator;
@@ -364,6 +386,9 @@ static OSStatus VolDeckHALInitialize(AudioServerPlugInDriverRef inDriver, AudioS
     gVolDeckHALHost = inHost;
     atomic_store(&gVolDeckHALRunningClientCount, 0);
     atomic_store(&gVolDeckHALStartHostTime, mach_absolute_time());
+    atomic_store(&gVolDeckHALClockSeed, 1);
+    atomic_store(&gVolDeckHALBufferFrameSize, kVolDeckHALDefaultBufferFrames);
+    atomic_store(&gVolDeckHALNominalSampleRate, kVolDeckHALDefaultSampleRate);
     return kAudioHardwareNoError;
 }
 
@@ -677,7 +702,7 @@ static OSStatus VolDeckHALSetPropertyData(AudioServerPlugInDriverRef inDriver, A
 
         atomic_store(&gVolDeckHALNominalSampleRate, (UInt64)requestedSampleRate);
         atomic_fetch_add(&gVolDeckHALClockSeed, 1);
-        VolDeckHALNotifyDeviceProperty(kAudioDevicePropertyNominalSampleRate);
+        VolDeckHALNotifySampleRateProperties();
         return kAudioHardwareNoError;
     }
 
@@ -709,7 +734,7 @@ static OSStatus VolDeckHALSetPropertyData(AudioServerPlugInDriverRef inDriver, A
 
         atomic_store(&gVolDeckHALNominalSampleRate, (UInt64)requestedDescription->mSampleRate);
         atomic_fetch_add(&gVolDeckHALClockSeed, 1);
-        VolDeckHALNotifyDeviceProperty(kAudioDevicePropertyNominalSampleRate);
+        VolDeckHALNotifySampleRateProperties();
         return kAudioHardwareNoError;
     }
 

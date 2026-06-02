@@ -9,6 +9,14 @@
 
 static int gFailureCount = 0;
 
+enum {
+    kMaxRecordedNotifications = 16,
+};
+
+static UInt32 gRecordedNotificationCount = 0;
+static AudioObjectID gRecordedNotificationObjects[kMaxRecordedNotifications];
+static AudioObjectPropertySelector gRecordedNotificationSelectors[kMaxRecordedNotifications];
+
 static void RecordFailure(const char *file, int line, const char *message)
 {
     fprintf(stderr, "%s:%d: %s\n", file, line, message);
@@ -62,6 +70,48 @@ static AudioObjectPropertyAddress Address(AudioObjectPropertySelector selector, 
         kAudioObjectPropertyElementMain,
     };
     return address;
+}
+
+static OSStatus RecordPropertiesChanged(AudioServerPlugInHostRef inHost, AudioObjectID inObjectID, UInt32 inNumberAddresses, const AudioObjectPropertyAddress *inAddresses)
+{
+    (void)inHost;
+
+    for (UInt32 index = 0; index < inNumberAddresses; index += 1) {
+        if (gRecordedNotificationCount < kMaxRecordedNotifications) {
+            gRecordedNotificationObjects[gRecordedNotificationCount] = inObjectID;
+            gRecordedNotificationSelectors[gRecordedNotificationCount] = inAddresses[index].mSelector;
+        }
+        gRecordedNotificationCount += 1;
+    }
+
+    return kAudioHardwareNoError;
+}
+
+static AudioServerPlugInHostInterface gTestHost = {
+    RecordPropertiesChanged,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+};
+
+static void ResetRecordedNotifications(void)
+{
+    gRecordedNotificationCount = 0;
+    memset(gRecordedNotificationObjects, 0, sizeof(gRecordedNotificationObjects));
+    memset(gRecordedNotificationSelectors, 0, sizeof(gRecordedNotificationSelectors));
+}
+
+static Boolean RecordedNotificationIncludes(AudioObjectID objectID, AudioObjectPropertySelector selector)
+{
+    UInt32 count = gRecordedNotificationCount < kMaxRecordedNotifications ? gRecordedNotificationCount : kMaxRecordedNotifications;
+    for (UInt32 index = 0; index < count; index += 1) {
+        if (gRecordedNotificationObjects[index] == objectID && gRecordedNotificationSelectors[index] == selector) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 static OSStatus GetSize(AudioObjectID objectID, AudioObjectPropertySelector selector, AudioObjectPropertyScope scope, UInt32 *outSize)
@@ -173,6 +223,46 @@ static void TestDefaultDeviceFlagsStayOutputScoped(void)
     EXPECT_UINT32(GetUInt32(kVolDeckHALDeviceObjectID, kAudioDevicePropertyDeviceCanBeDefaultSystemDevice, kAudioObjectPropertyScopeInput), 0);
 }
 
+static void TestInitializeResetsMutableDeviceState(void)
+{
+    Float64 sampleRate = 44100.0;
+    UInt32 bufferFrameSize = 1024;
+    Float64 sampleTime = 0.0;
+    UInt64 hostTime = 0;
+    UInt64 seed = 0;
+
+    EXPECT_STATUS(SetData(kVolDeckHALDeviceObjectID, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, sizeof(sampleRate), &sampleRate), kAudioHardwareNoError);
+    EXPECT_STATUS(SetData(kVolDeckHALDeviceObjectID, kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal, sizeof(bufferFrameSize), &bufferFrameSize), kAudioHardwareNoError);
+    EXPECT_STATUS(VolDeckHALStartIO(&gVolDeckHALDriverInterfacePointer, kVolDeckHALDeviceObjectID, 1), kAudioHardwareNoError);
+
+    EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, NULL), kAudioHardwareNoError);
+
+    EXPECT_FLOAT64(GetFloat64(kVolDeckHALDeviceObjectID, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal), kVolDeckHALDefaultSampleRate);
+    EXPECT_UINT32(GetUInt32(kVolDeckHALDeviceObjectID, kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal), kVolDeckHALDefaultBufferFrames);
+    EXPECT_UINT32(GetUInt32(kVolDeckHALDeviceObjectID, kAudioDevicePropertyDeviceIsRunning, kAudioObjectPropertyScopeGlobal), 0);
+    EXPECT_STATUS(VolDeckHALGetZeroTimeStamp(&gVolDeckHALDriverInterfacePointer, kVolDeckHALDeviceObjectID, 1, &sampleTime, &hostTime, &seed), kAudioHardwareNoError);
+    EXPECT_TRUE(seed == 1);
+}
+
+static void TestSampleRateChangesNotifyStreamFormats(void)
+{
+    EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, &gTestHost), kAudioHardwareNoError);
+
+    AudioStreamBasicDescription streamDescription = VolDeckHALStreamDescription(44100.0);
+    ResetRecordedNotifications();
+    EXPECT_STATUS(SetData(kVolDeckHALOutputStreamObjectID, kAudioStreamPropertyVirtualFormat, kAudioObjectPropertyScopeGlobal, sizeof(streamDescription), &streamDescription), kAudioHardwareNoError);
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALOutputStreamObjectID, kAudioStreamPropertyVirtualFormat));
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALOutputStreamObjectID, kAudioStreamPropertyPhysicalFormat));
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALDeviceObjectID, kAudioDevicePropertyNominalSampleRate));
+
+    Float64 sampleRate = 48000.0;
+    ResetRecordedNotifications();
+    EXPECT_STATUS(SetData(kVolDeckHALDeviceObjectID, kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, sizeof(sampleRate), &sampleRate), kAudioHardwareNoError);
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALOutputStreamObjectID, kAudioStreamPropertyVirtualFormat));
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALOutputStreamObjectID, kAudioStreamPropertyPhysicalFormat));
+    EXPECT_TRUE(RecordedNotificationIncludes(kVolDeckHALDeviceObjectID, kAudioDevicePropertyNominalSampleRate));
+}
+
 static void TestSupportedStreamFormats(void)
 {
     UInt32 dataSize = 0;
@@ -249,9 +339,11 @@ int main(void)
 {
     EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, NULL), kAudioHardwareNoError);
 
+    TestInitializeResetsMutableDeviceState();
     TestPluginPublishesOneDevice();
     TestDeviceIsOutputOnly();
     TestDefaultDeviceFlagsStayOutputScoped();
+    TestSampleRateChangesNotifyStreamFormats();
     TestSupportedStreamFormats();
     TestIOStateAndOperations();
     TestTimestampContract();

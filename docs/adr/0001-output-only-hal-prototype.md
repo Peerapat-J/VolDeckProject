@@ -75,9 +75,8 @@ path.
 
 - [x] #12 Create minimal virtual output device
 - [x] #13 Publish VolDeck as output-only device
-- [ ] #15 Verify no virtual input, no mic permission, no indicator
+- [ ] #15 Verify no virtual input, no mic permission, no indicator after installing the development driver
 - [x] #16 Document development install and uninstall for HAL plugin
-- [ ] Run live M2 verification after installing the development driver
 
 ## References
 
