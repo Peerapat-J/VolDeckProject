@@ -35,10 +35,13 @@ assert_plist_key_absent() {
 }
 
 assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeck' 'Core app target must not add capture or microphone usage-description keys.'
+assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeckOutputHelper' 'Output helper must not add capture or microphone usage-description keys.'
 assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeckHALPlugin' 'HAL plugin must not add capture or microphone usage-description keys.'
+assert_no_match 'ScreenCaptureKit|AVCapture|CGRequestScreenCaptureAccess|CGPreflightScreenCaptureAccess|AudioHardwareCreate(ProcessTap|AggregateDevice)|CATapDescription' 'VolDeckOutputHelper' 'Output helper must not use capture-oriented APIs in the M3 pass-through path.'
 assert_no_match 'ScreenCaptureKit|AVCapture|CGRequestScreenCaptureAccess|CGPreflightScreenCaptureAccess|AudioHardwareCreate(ProcessTap|AggregateDevice)|CATapDescription' 'VolDeckHALPlugin' 'HAL plugin must not use capture-oriented APIs in the M2 output-only path.'
 assert_no_match 'AudioObject(Get|Set)PropertyData|AudioDevice(Start|Stop|CreateIOProcID)' 'VolDeckHALPlugin' 'AudioServerPlugIn code must not call HAL client APIs from inside the plugin host.'
 assert_no_match 'kAudioStreamTerminalType(HeadsetMicrophone|ReceiverMicrophone|Microphone)' 'VolDeckHALPlugin' 'HAL plugin must not publish microphone terminal types.'
+assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckOutputHelper' 'Output helper must not use network APIs or frameworks in the M3 pass-through path.'
 assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckHALPlugin' 'HAL plugin must not use network APIs or frameworks in the M2 output-only path.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'

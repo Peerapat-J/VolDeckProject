@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1A0000012D00000100000001 /* VolDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000001 /* VolDeckApp.swift */; };
 		1A0000012D00000100000002 /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000002 /* AppPreferences.swift */; };
+		1A0000012D00000100000009 /* OutputHelperController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000009 /* OutputHelperController.swift */; };
 		1A0000012D00000100000003 /* PlaceholderAudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000003 /* PlaceholderAudioApp.swift */; };
 		1A0000012D00000100000004 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000004 /* MenuBarRootView.swift */; };
 		1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000005 /* AppVolumeRow.swift */; };
@@ -16,11 +17,38 @@
 		1A0000012D00000100000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000007 /* Assets.xcassets */; };
 		1B0000012D00000100000001 /* VolDeckHALPlugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000012D00000000000001 /* VolDeckHALPlugin.c */; };
 		1C0000012D00000100000001 /* VolDeckHALPluginContractTests.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */; };
+		1D0000012D00000100000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000012D00000000000001 /* main.swift */; };
+		1D0000012D00000100000002 /* VolDeckOutputHelper in Copy Helper */ = {isa = PBXBuildFile; fileRef = 1D0000012D00000000000002 /* VolDeckOutputHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1D0000012D00000500000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A0000012D00000500000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1D0000012D00000400000001;
+			remoteInfo = VolDeckOutputHelper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1D0000012D00000200000003 /* Copy Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				1D0000012D00000100000002 /* VolDeckOutputHelper in Copy Helper */,
+			);
+			name = "Copy Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		1A0000012D00000000000001 /* VolDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolDeckApp.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000002 /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
+		1A0000012D00000000000009 /* OutputHelperController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputHelperController.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000003 /* PlaceholderAudioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderAudioApp.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000004 /* MenuBarRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRootView.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000005 /* AppVolumeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeRow.swift; sourceTree = "<group>"; };
@@ -32,6 +60,8 @@
 		1B0000012D00000000000003 /* VolDeckHALPlugin.driver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VolDeckHALPlugin.driver; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = VolDeckHALPluginContractTests.c; sourceTree = "<group>"; };
 		1C0000012D00000000000002 /* VolDeckHALPluginContractTests */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = VolDeckHALPluginContractTests; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D0000012D00000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		1D0000012D00000000000002 /* VolDeckOutputHelper */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = VolDeckOutputHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,6 +86,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1D0000012D00000200000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -63,6 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000012D00000300000002 /* VolDeck */,
+				1D0000012D00000300000001 /* VolDeckOutputHelper */,
 				1B0000012D00000300000001 /* VolDeckHALPlugin */,
 				1C0000012D00000300000001 /* VolDeckHALPluginTests */,
 				1A0000012D00000300000006 /* Products */,
@@ -84,6 +122,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000012D00000000000002 /* AppPreferences.swift */,
+				1A0000012D00000000000009 /* OutputHelperController.swift */,
 				1A0000012D00000000000003 /* PlaceholderAudioApp.swift */,
 			);
 			path = Models;
@@ -111,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0000012D00000000000008 /* VolDeck.app */,
+				1D0000012D00000000000002 /* VolDeckOutputHelper */,
 				1B0000012D00000000000003 /* VolDeckHALPlugin.driver */,
 				1C0000012D00000000000002 /* VolDeckHALPluginContractTests */,
 			);
@@ -134,6 +174,14 @@
 			path = VolDeckHALPluginTests;
 			sourceTree = "<group>";
 		};
+		1D0000012D00000300000001 /* VolDeckOutputHelper */ = {
+			isa = PBXGroup;
+			children = (
+				1D0000012D00000000000001 /* main.swift */,
+			);
+			path = VolDeckOutputHelper;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -144,10 +192,12 @@
 				1A0000012D00000200000002 /* Sources */,
 				1A0000012D00000200000001 /* Frameworks */,
 				1A0000012D00000200000003 /* Resources */,
+				1D0000012D00000200000003 /* Copy Helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				1D0000012D00000500000002 /* PBXTargetDependency */,
 			);
 			name = VolDeck;
 			productName = VolDeck;
@@ -186,6 +236,22 @@
 			productReference = 1C0000012D00000000000002 /* VolDeckHALPluginContractTests */;
 			productType = "com.apple.product-type.tool";
 		};
+		1D0000012D00000400000001 /* VolDeckOutputHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1D0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckOutputHelper" */;
+			buildPhases = (
+				1D0000012D00000200000001 /* Sources */,
+				1D0000012D00000200000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VolDeckOutputHelper;
+			productName = VolDeckOutputHelper;
+			productReference = 1D0000012D00000000000002 /* VolDeckOutputHelper */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -199,13 +265,16 @@
 					1A0000012D00000400000001 = {
 						CreatedOnToolsVersion = 26.5;
 					};
-				1B0000012D00000400000001 = {
-					CreatedOnToolsVersion = 26.5;
+					1B0000012D00000400000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					1C0000012D00000400000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					1D0000012D00000400000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
-				1C0000012D00000400000001 = {
-					CreatedOnToolsVersion = 26.5;
-				};
-			};
 			};
 			buildConfigurationList = 1A0000012D00000600000001 /* Build configuration list for PBXProject "VolDeck" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -221,6 +290,7 @@
 			projectRoot = "";
 			targets = (
 				1A0000012D00000400000001 /* VolDeck */,
+				1D0000012D00000400000001 /* VolDeckOutputHelper */,
 				1B0000012D00000400000001 /* VolDeckHALPlugin */,
 				1C0000012D00000400000001 /* VolDeckHALPluginContractTests */,
 			);
@@ -245,6 +315,7 @@
 			files = (
 				1A0000012D00000100000001 /* VolDeckApp.swift in Sources */,
 				1A0000012D00000100000002 /* AppPreferences.swift in Sources */,
+				1A0000012D00000100000009 /* OutputHelperController.swift in Sources */,
 				1A0000012D00000100000003 /* PlaceholderAudioApp.swift in Sources */,
 				1A0000012D00000100000004 /* MenuBarRootView.swift in Sources */,
 				1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */,
@@ -268,7 +339,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1D0000012D00000200000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1D0000012D00000100000001 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1D0000012D00000500000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1D0000012D00000400000001 /* VolDeckOutputHelper */;
+			targetProxy = 1D0000012D00000500000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A0000012D00000600000003 /* Debug */ = {
@@ -573,6 +660,39 @@
 			};
 			name = Release;
 		};
+		1D0000012D00000600000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.output-helper";
+				PRODUCT_NAME = VolDeckOutputHelper;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.5;
+			};
+			name = Debug;
+		};
+		1D0000012D00000600000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.output-helper";
+				PRODUCT_NAME = VolDeckOutputHelper;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.5;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -608,6 +728,15 @@
 			buildConfigurations = (
 				1C0000012D00000600000002 /* Debug */,
 				1C0000012D00000600000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1D0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckOutputHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1D0000012D00000600000002 /* Debug */,
+				1D0000012D00000600000003 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

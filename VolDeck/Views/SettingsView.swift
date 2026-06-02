@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var preferences: AppPreferences
+    @ObservedObject var outputHelper: OutputHelperController
 
     var body: some View {
         TabView {
@@ -38,11 +39,23 @@ struct SettingsView: View {
                 LabeledContent("Login item status", value: preferences.launchAtLoginStatus)
 
                 LabeledContent("Driver status", value: "Not installed")
-                LabeledContent("Helper status", value: "Not running")
+                LabeledContent("Helper status", value: outputHelper.statusText)
+
+                HStack {
+                    Button("Start Helper") {
+                        outputHelper.start()
+                    }
+                    .disabled(!outputHelper.canStart)
+
+                    Button("Stop Helper") {
+                        outputHelper.stop()
+                    }
+                    .disabled(!outputHelper.canStop)
+                }
             } header: {
                 Text("Startup")
             } footer: {
-                Text("The M1 app shell does not activate any audio driver or helper process.")
+                Text("The M3 helper can be started for development without activating microphone or recording permissions.")
             }
         }
         .formStyle(.grouped)
@@ -85,9 +98,11 @@ struct SettingsView: View {
             Section {
                 LabeledContent("Audio backend", value: "Not connected")
                 LabeledContent("Selected output", value: preferences.selectedOutputName)
+                LabeledContent("Helper location", value: outputHelper.helperLocation)
+                LabeledContent("Helper message", value: outputHelper.lastMessage)
                 LabeledContent("Privacy gate", value: "No permissions requested")
             } header: {
-                Text("M1 placeholder state")
+                Text("M3 helper state")
             }
         }
         .formStyle(.grouped)
@@ -95,5 +110,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(preferences: AppPreferences())
+    SettingsView(preferences: AppPreferences(), outputHelper: OutputHelperController())
 }

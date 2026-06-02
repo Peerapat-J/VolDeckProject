@@ -75,8 +75,14 @@ path.
 
 - [x] #12 Create minimal virtual output device
 - [x] #13 Publish VolDeck as output-only device
-- [ ] #15 Verify no virtual input, no mic permission, no indicator after installing the development driver
+- [x] #15 Verify no virtual input, no mic permission, no indicator after installing the development driver
 - [x] #16 Document development install and uninstall for HAL plugin
+- [ ] #17 Create output playback helper
+- [ ] #18 Bridge HAL audio to helper buffer
+- [ ] #19 Forward audio to selected real output
+- [ ] #20 Handle sample-rate and device changes
+- [ ] #21 Restore previous output after helper crash
+- [ ] #22 Add pass-through latency and underrun diagnostics
 
 ## References
 
@@ -84,4 +90,5 @@ path.
 - docs/privacy-principles.md
 - docs/market-benchmark.md
 - docs/m2-virtual-output-device.md
+- docs/m3-output-pass-through.md
 - docs/hal-plugin-development.md
