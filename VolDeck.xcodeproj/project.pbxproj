@@ -19,6 +19,7 @@
 		1C0000012D00000100000001 /* VolDeckHALPluginContractTests.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */; };
 		1D0000012D00000100000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000012D00000000000001 /* main.swift */; };
 		1D0000012D00000100000002 /* VolDeckOutputHelper in Copy Helper */ = {isa = PBXBuildFile; fileRef = 1D0000012D00000000000002 /* VolDeckOutputHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		1D0000012D00000100000003 /* AudioBridgeAtomics.c in Sources */ = {isa = PBXBuildFile; fileRef = 1D0000012D00000000000003 /* AudioBridgeAtomics.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		1C0000012D00000000000002 /* VolDeckHALPluginContractTests */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = VolDeckHALPluginContractTests; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D0000012D00000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		1D0000012D00000000000002 /* VolDeckOutputHelper */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = VolDeckOutputHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		1D0000012D00000000000003 /* AudioBridgeAtomics.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = AudioBridgeAtomics.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -178,6 +180,7 @@
 			isa = PBXGroup;
 			children = (
 				1D0000012D00000000000001 /* main.swift */,
+				1D0000012D00000000000003 /* AudioBridgeAtomics.c */,
 			);
 			path = VolDeckOutputHelper;
 			sourceTree = "<group>";
@@ -344,6 +347,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1D0000012D00000100000001 /* main.swift in Sources */,
+				1D0000012D00000100000003 /* AudioBridgeAtomics.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,16 +15,16 @@ Status checked: 2026-06-02 from GitHub milestone `Milestone 3: Output Pass-throu
 | M2 prerequisite | Complete; PR #55 merged into `dev` |
 | M3 milestone | Open |
 | M3 due date | Not set |
-| Active work | #17 output playback helper lifecycle |
-| Open M3 issues | #17, #18, #19, #20, #21, #22 |
-| Closed M3 issues | None |
+| Active work | #18 HAL-to-helper audio bridge |
+| Open M3 issues | #18, #19, #20, #21, #22 |
+| Closed M3 issues | #17 |
 
 ## Covered Issues
 
 | Issue | Current Status | Role |
 | --- | --- | --- |
-| #17 `[M3][helper] Create output playback helper` | In progress, P0 | Create a helper process that can start, stop, and report health without requesting microphone or recording permissions. |
-| #18 `[M3][helper] Bridge HAL audio to helper buffer` | Open, P0 | Move HAL output frames into a helper-readable realtime-safe buffer without publishing an input device. |
+| #17 `[M3][helper] Create output playback helper` | Done, P0 | Create a helper process that can start, stop, and report health without requesting microphone or recording permissions. |
+| #18 `[M3][helper] Bridge HAL audio to helper buffer` | In progress, P0 | Move HAL output frames into a helper-readable realtime-safe buffer without publishing an input device. |
 | #19 `[M3][audio] Forward audio to selected real output` | Open, P0 | Play the received VolDeck stream through one selected physical output device. |
 | #20 `[M3][audio] Handle sample-rate and device changes` | Open, P1 | Keep pass-through resilient when sample rate, headphones, Bluetooth, or default output changes. |
 | #21 `[M3][recovery] Restore previous output after helper crash` | Open, P0 | Detect helper failure and attempt to restore the previously selected real output device. |
@@ -61,6 +61,32 @@ The helper supports:
 - `--health-check` for development validation
 - `--run` for start/stop/status lifecycle testing
 - a `{"command":"stop"}` stdin command for graceful shutdown
+
+## HAL-to-helper Bridge Path
+
+The second M3 implementation slice adds a fixed-version shared-memory ring
+buffer for #18. The HAL side maps and initializes the bridge before realtime IO
+starts, then `WriteMix` copies interleaved stereo Float32 output frames into the
+ring with atomics and bounded `memcpy` only. The callback does not allocate,
+perform file/network IO, log samples, or block waiting for the helper.
+
+The default runtime bridge is a guarded file-backed mapping at
+`/tmp/com.peerapatj.voldeck.audio.bridge.v1`. The HAL opens it owner-only,
+rejects symlinks/non-regular files/stale owners, and grants read/write access to
+the user ID of each device client outside the realtime path. Tests can override
+the bridge with `VOLDECK_AUDIO_BRIDGE_FILE_PATH`; `VOLDECK_AUDIO_BRIDGE_SHM_NAME`
+is available when a POSIX shared-memory object is explicitly needed.
+
+The helper can inspect the bridge with development commands:
+
+- `--buffer-status` reports metadata and counters only.
+- `--buffer-read-once <frames>` advances the read cursor for test/probe use
+  without printing audio sample contents.
+- `--buffer-unlink` removes a development/test bridge object.
+
+Playback to a selected physical output remains #19. This #18 slice proves that
+frames and buffer-health counters can cross from HAL to the helper-readable
+bridge while the device remains output-only.
 
 ## Privacy Position
 
@@ -99,6 +125,7 @@ Keep the M2 gates running while M3 changes the driver/helper path:
 xcodebuild -quiet -project VolDeck.xcodeproj -target VolDeckHALPlugin -configuration Debug CODE_SIGNING_ALLOWED=NO build
 sh scripts/check_hal_safety.sh
 sh scripts/run_hal_contract_tests.sh
+sh scripts/run_audio_bridge_tests.sh
 sh scripts/run_output_helper_lifecycle_tests.sh
 ```
 

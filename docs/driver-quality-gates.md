@@ -8,6 +8,7 @@ successful build is not enough to merge driver behavior.
 - Build the SwiftUI app target.
 - Build the HAL plugin target.
 - Build and run HAL contract tests.
+- Build and run HAL-to-helper audio bridge tests.
 - Run Xcode static analysis for driver-related targets.
 - Run the HAL safety guard script.
 - Keep warning-as-error settings enabled for the HAL plugin and contract test
@@ -29,6 +30,7 @@ driver property model whenever the HAL surface changes:
 - supported sample rates and rejection of unsupported formats
 - IO start/stop state
 - allowed and rejected IO operations
+- HAL-to-helper bridge frame and counter transfer
 - timestamp contract
 
 ## Static Safety Guard

@@ -1,9 +1,12 @@
 #include <CoreAudio/AudioHardware.h>
 #include <CoreAudio/AudioServerPlugIn.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "../VolDeckHALPlugin/VolDeckHALPlugin.c"
 
@@ -16,6 +19,8 @@ enum {
 static UInt32 gRecordedNotificationCount = 0;
 static AudioObjectID gRecordedNotificationObjects[kMaxRecordedNotifications];
 static AudioObjectPropertySelector gRecordedNotificationSelectors[kMaxRecordedNotifications];
+
+static char gDefaultBridgeFilePath[PATH_MAX];
 
 static void RecordFailure(const char *file, int line, const char *message)
 {
@@ -47,6 +52,17 @@ static void RecordFailure(const char *file, int line, const char *message)
         if (actualValue != expectedValue) { \
             char message[160]; \
             snprintf(message, sizeof(message), "expected %u but got %u: %s", expectedValue, actualValue, #actual); \
+            RecordFailure(__FILE__, __LINE__, message); \
+        } \
+    } while (0)
+
+#define EXPECT_UINT64(actual, expected) \
+    do { \
+        UInt64 actualValue = (actual); \
+        UInt64 expectedValue = (expected); \
+        if (actualValue != expectedValue) { \
+            char message[160]; \
+            snprintf(message, sizeof(message), "expected %llu but got %llu: %s", expectedValue, actualValue, #actual); \
             RecordFailure(__FILE__, __LINE__, message); \
         } \
     } while (0)
@@ -322,6 +338,87 @@ static void TestIOStateAndOperations(void)
     EXPECT_STATUS(VolDeckHALDoIOOperation(&gVolDeckHALDriverInterfacePointer, kVolDeckHALDeviceObjectID, kVolDeckHALOutputStreamObjectID, 1, kAudioServerPlugInIOOperationReadInput, 128, NULL, NULL, NULL), kAudioHardwareUnsupportedOperationError);
 }
 
+static void TestAudioBridgeWritesOutputFrames(void)
+{
+    Float32 frames[8 * kVolDeckHALStereoChannels];
+    Float32 largeFrames[(kVolDeckHALAudioBridgeCapacityFrames + 16) * kVolDeckHALStereoChannels];
+
+    EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, NULL), kAudioHardwareNoError);
+    EXPECT_TRUE(gVolDeckHALAudioBridgeHeader != NULL);
+    EXPECT_TRUE(gVolDeckHALAudioBridgeFrames != NULL);
+    EXPECT_UINT32(gVolDeckHALAudioBridgeHeader->magic, kVolDeckHALAudioBridgeMagic);
+    EXPECT_UINT32(gVolDeckHALAudioBridgeHeader->version, kVolDeckHALAudioBridgeVersion);
+    EXPECT_UINT32(gVolDeckHALAudioBridgeHeader->capacityFrames, kVolDeckHALAudioBridgeCapacityFrames);
+    EXPECT_UINT32(gVolDeckHALAudioBridgeHeader->bytesPerFrame, sizeof(Float32) * kVolDeckHALStereoChannels);
+
+    AudioServerPlugInClientInfo clientInfo;
+    memset(&clientInfo, 0, sizeof(clientInfo));
+    clientInfo.mClientID = 1;
+    clientInfo.mProcessID = getpid();
+    clientInfo.mIsNativeEndian = true;
+    EXPECT_STATUS(VolDeckHALAddDeviceClient(&gVolDeckHALDriverInterfacePointer, kVolDeckHALDeviceObjectID, &clientInfo), kAudioHardwareNoError);
+
+    for (UInt32 index = 0; index < 8 * kVolDeckHALStereoChannels; index += 1) {
+        frames[index] = (Float32)index / 10.0f;
+    }
+
+    EXPECT_STATUS(
+        VolDeckHALDoIOOperation(
+            &gVolDeckHALDriverInterfacePointer,
+            kVolDeckHALDeviceObjectID,
+            kVolDeckHALOutputStreamObjectID,
+            1,
+            kAudioServerPlugInIOOperationWriteMix,
+            8,
+            NULL,
+            frames,
+            NULL),
+        kAudioHardwareNoError);
+
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->writeFrameIndex, 8);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->readFrameIndex, 0);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalFramesWritten, 8);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalWriteCalls, 1);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->lastWriteFrames, 8);
+    EXPECT_TRUE(memcmp(gVolDeckHALAudioBridgeFrames, frames, sizeof(frames)) == 0);
+
+    EXPECT_STATUS(
+        VolDeckHALDoIOOperation(
+            &gVolDeckHALDriverInterfacePointer,
+            kVolDeckHALDeviceObjectID,
+            kVolDeckHALOutputStreamObjectID,
+            1,
+            kAudioServerPlugInIOOperationWriteMix,
+            4,
+            NULL,
+            NULL,
+            NULL),
+        kAudioHardwareNoError);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalUnderrunFrames, 4);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalWriteCalls, 2);
+
+    for (UInt32 index = 0; index < (kVolDeckHALAudioBridgeCapacityFrames + 16) * kVolDeckHALStereoChannels; index += 1) {
+        largeFrames[index] = 1.0f;
+    }
+
+    EXPECT_STATUS(
+        VolDeckHALDoIOOperation(
+            &gVolDeckHALDriverInterfacePointer,
+            kVolDeckHALDeviceObjectID,
+            kVolDeckHALOutputStreamObjectID,
+            1,
+            kAudioServerPlugInIOOperationWriteMix,
+            kVolDeckHALAudioBridgeCapacityFrames + 16,
+            NULL,
+            largeFrames,
+            NULL),
+        kAudioHardwareNoError);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalFramesWritten, kVolDeckHALAudioBridgeCapacityFrames);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalOverrunFrames, 24);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalFramesDropped, 24);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->writeFrameIndex - gVolDeckHALAudioBridgeHeader->readFrameIndex, kVolDeckHALAudioBridgeCapacityFrames);
+}
+
 static void TestTimestampContract(void)
 {
     Float64 sampleTime = 0.0;
@@ -337,6 +434,23 @@ static void TestTimestampContract(void)
 
 int main(void)
 {
+    if (getenv("VOLDECK_AUDIO_BRIDGE_FILE_PATH") == NULL) {
+        const char *temporaryDirectory = getenv("TMPDIR");
+        if (temporaryDirectory == NULL || temporaryDirectory[0] == '\0') {
+            temporaryDirectory = "/tmp";
+        }
+
+        snprintf(gDefaultBridgeFilePath, sizeof(gDefaultBridgeFilePath), "%s/VolDeckHALBridge-%ld.bin", temporaryDirectory, (long)getpid());
+        setenv("VOLDECK_AUDIO_BRIDGE_FILE_PATH", gDefaultBridgeFilePath, 0);
+    }
+
+    const char *bridgeFilePath = VolDeckHALAudioBridgeFilePath();
+    if (bridgeFilePath != NULL) {
+        unlink(bridgeFilePath);
+    } else {
+        shm_unlink(VolDeckHALAudioBridgeName());
+    }
+
     EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, NULL), kAudioHardwareNoError);
 
     TestInitializeResetsMutableDeviceState();
@@ -347,6 +461,15 @@ int main(void)
     TestSupportedStreamFormats();
     TestIOStateAndOperations();
     TestTimestampContract();
+    TestAudioBridgeWritesOutputFrames();
+
+    if (getenv("VOLDECK_AUDIO_BRIDGE_KEEP_SHM") == NULL) {
+        if (bridgeFilePath != NULL) {
+            unlink(bridgeFilePath);
+        } else {
+            shm_unlink(VolDeckHALAudioBridgeName());
+        }
+    }
 
     if (gFailureCount != 0) {
         fprintf(stderr, "VolDeckHALPluginContractTests failed: %d failure(s)\n", gFailureCount);
