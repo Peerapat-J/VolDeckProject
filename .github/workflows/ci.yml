@@ -93,5 +93,8 @@ jobs:
       - name: Run HAL contract tests
         run: sh scripts/run_hal_contract_tests.sh
 
+      - name: Run audio bridge tests
+        run: sh scripts/run_audio_bridge_tests.sh
+
       - name: Run output helper lifecycle tests
         run: sh scripts/run_output_helper_lifecycle_tests.sh

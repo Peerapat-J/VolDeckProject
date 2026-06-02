@@ -1,10 +1,18 @@
 #include <CoreAudio/AudioHardware.h>
 #include <CoreAudio/AudioServerPlugIn.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <mach/mach_time.h>
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 enum {
     kVolDeckHALDeviceObjectID = 2,
@@ -21,6 +29,38 @@ enum {
     kVolDeckHALZeroTimeStampPeriod = 16384,
 };
 
+enum {
+    kVolDeckHALAudioBridgeMagic = 0x56444247,
+    kVolDeckHALAudioBridgeVersion = 1,
+    kVolDeckHALAudioBridgeCapacityFrames = 8192,
+    kVolDeckHALAudioBridgeFileMode = S_IRUSR | S_IWUSR,
+};
+
+typedef struct {
+    UInt32 magic;
+    UInt32 version;
+    UInt32 headerBytes;
+    UInt32 capacityFrames;
+    UInt32 channelCount;
+    UInt32 bytesPerFrame;
+    UInt32 flags;
+    UInt32 reserved;
+    UInt64 sampleRate;
+    UInt64 writeFrameIndex;
+    UInt64 readFrameIndex;
+    UInt64 totalFramesWritten;
+    UInt64 totalFramesRead;
+    UInt64 totalFramesDropped;
+    UInt64 totalOverrunFrames;
+    UInt64 totalUnderrunFrames;
+    UInt64 totalWriteCalls;
+    UInt64 totalReadCalls;
+    UInt64 lastWriteFrames;
+    UInt64 lastReadFrames;
+    UInt64 lastHostTime;
+    UInt64 totalIndexAnomalies;
+} VolDeckHALAudioBridgeHeader;
+
 static AudioServerPlugInHostRef gVolDeckHALHost = NULL;
 static atomic_uint gVolDeckHALRefCount = 0;
 static atomic_uint gVolDeckHALRunningClientCount = 0;
@@ -28,6 +68,10 @@ static _Atomic(UInt64) gVolDeckHALStartHostTime = 0;
 static _Atomic(UInt64) gVolDeckHALClockSeed = 1;
 static _Atomic(UInt32) gVolDeckHALBufferFrameSize = kVolDeckHALDefaultBufferFrames;
 static _Atomic(UInt64) gVolDeckHALNominalSampleRate = kVolDeckHALDefaultSampleRate;
+static VolDeckHALAudioBridgeHeader *gVolDeckHALAudioBridgeHeader = NULL;
+static UInt8 *gVolDeckHALAudioBridgeFrames = NULL;
+static size_t gVolDeckHALAudioBridgeMapSize = 0;
+static int gVolDeckHALAudioBridgeDescriptor = -1;
 
 static HRESULT STDMETHODCALLTYPE VolDeckHALQueryInterface(void *inDriver, REFIID inUUID, LPVOID *outInterface);
 static ULONG STDMETHODCALLTYPE VolDeckHALAddRef(void *inDriver);
@@ -91,6 +135,255 @@ static CFUUIDRef VolDeckHALFactoryUUID(void)
 static UInt64 VolDeckHALCurrentSampleRate(void)
 {
     return atomic_load(&gVolDeckHALNominalSampleRate);
+}
+
+static UInt32 VolDeckHALAudioBridgeBytesPerFrame(void)
+{
+    return (UInt32)(sizeof(Float32) * kVolDeckHALStereoChannels);
+}
+
+static size_t VolDeckHALAudioBridgeDataBytes(void)
+{
+    return (size_t)kVolDeckHALAudioBridgeCapacityFrames * VolDeckHALAudioBridgeBytesPerFrame();
+}
+
+static size_t VolDeckHALAudioBridgeMapBytes(void)
+{
+    return sizeof(VolDeckHALAudioBridgeHeader) + VolDeckHALAudioBridgeDataBytes();
+}
+
+static UInt64 VolDeckHALAtomicLoadUInt64(const UInt64 *value)
+{
+    return __atomic_load_n(value, __ATOMIC_ACQUIRE);
+}
+
+static void VolDeckHALAtomicStoreUInt64(UInt64 *value, UInt64 newValue)
+{
+    __atomic_store_n(value, newValue, __ATOMIC_RELEASE);
+}
+
+static UInt64 VolDeckHALAtomicFetchAddUInt64(UInt64 *value, UInt64 amount)
+{
+    return __atomic_fetch_add(value, amount, __ATOMIC_ACQ_REL);
+}
+
+static const char *VolDeckHALAudioBridgeName(void)
+{
+    const char *overrideName = getenv("VOLDECK_AUDIO_BRIDGE_SHM_NAME");
+    if (overrideName != NULL && overrideName[0] == '/' && strchr(overrideName + 1, '/') == NULL) {
+        return overrideName;
+    }
+
+    return "/com.peerapatj.voldeck.audio.bridge.v1";
+}
+
+static Boolean VolDeckHALAudioBridgeUsesSharedMemoryName(void)
+{
+    const char *overrideName = getenv("VOLDECK_AUDIO_BRIDGE_SHM_NAME");
+    return overrideName != NULL && overrideName[0] == '/' && strchr(overrideName + 1, '/') == NULL;
+}
+
+static const char *VolDeckHALAudioBridgeDefaultFilePath(void)
+{
+    static char bridgeDirectory[PATH_MAX];
+    static char bridgePath[PATH_MAX];
+    static Boolean didResolvePath = false;
+
+    if (didResolvePath) {
+        return bridgePath[0] != '\0' ? bridgePath : NULL;
+    }
+
+    didResolvePath = true;
+
+    char temporaryDirectory[PATH_MAX];
+    size_t temporaryDirectoryLength = confstr(_CS_DARWIN_USER_TEMP_DIR, temporaryDirectory, sizeof(temporaryDirectory));
+    if (temporaryDirectoryLength == 0 || temporaryDirectoryLength > sizeof(temporaryDirectory)) {
+        return NULL;
+    }
+
+    int directoryBytes = snprintf(bridgeDirectory, sizeof(bridgeDirectory), "%s%s", temporaryDirectory, "com.peerapatj.voldeck");
+    if (directoryBytes < 0 || (size_t)directoryBytes >= sizeof(bridgeDirectory)) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    if (mkdir(bridgeDirectory, S_IRWXU) != 0 && errno != EEXIST) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    struct stat directoryInfo;
+    if (stat(bridgeDirectory, &directoryInfo) != 0 ||
+        !S_ISDIR(directoryInfo.st_mode) ||
+        directoryInfo.st_uid != geteuid() ||
+        (directoryInfo.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    int pathBytes = snprintf(bridgePath, sizeof(bridgePath), "%s/%s", bridgeDirectory, "audio.bridge.v1");
+    if (pathBytes < 0 || (size_t)pathBytes >= sizeof(bridgePath)) {
+        bridgePath[0] = '\0';
+        return NULL;
+    }
+
+    return bridgePath;
+}
+
+static const char *VolDeckHALAudioBridgeFilePath(void)
+{
+    const char *filePath = getenv("VOLDECK_AUDIO_BRIDGE_FILE_PATH");
+    if (filePath != NULL && filePath[0] != '\0') {
+        return filePath;
+    }
+
+    return VolDeckHALAudioBridgeUsesSharedMemoryName() ? NULL : VolDeckHALAudioBridgeDefaultFilePath();
+}
+
+static void VolDeckHALAudioBridgeResetMappedMemory(void)
+{
+    if (gVolDeckHALAudioBridgeHeader == NULL || gVolDeckHALAudioBridgeFrames == NULL) {
+        return;
+    }
+
+    memset(gVolDeckHALAudioBridgeHeader, 0, gVolDeckHALAudioBridgeMapSize);
+    gVolDeckHALAudioBridgeHeader->magic = kVolDeckHALAudioBridgeMagic;
+    gVolDeckHALAudioBridgeHeader->version = kVolDeckHALAudioBridgeVersion;
+    gVolDeckHALAudioBridgeHeader->headerBytes = (UInt32)sizeof(VolDeckHALAudioBridgeHeader);
+    gVolDeckHALAudioBridgeHeader->capacityFrames = kVolDeckHALAudioBridgeCapacityFrames;
+    gVolDeckHALAudioBridgeHeader->channelCount = kVolDeckHALStereoChannels;
+    gVolDeckHALAudioBridgeHeader->bytesPerFrame = VolDeckHALAudioBridgeBytesPerFrame();
+    gVolDeckHALAudioBridgeHeader->sampleRate = VolDeckHALCurrentSampleRate();
+}
+
+static OSStatus VolDeckHALAudioBridgeEnsureMapped(Boolean resetAfterMapping)
+{
+    if (gVolDeckHALAudioBridgeHeader != NULL && gVolDeckHALAudioBridgeFrames != NULL) {
+        return kAudioHardwareNoError;
+    }
+
+    size_t mapSize = VolDeckHALAudioBridgeMapBytes();
+    const char *filePath = VolDeckHALAudioBridgeFilePath();
+    if (filePath == NULL && !VolDeckHALAudioBridgeUsesSharedMemoryName()) {
+        return kAudioHardwareIllegalOperationError;
+    }
+
+    int descriptor = filePath != NULL
+        ? open(filePath, O_CREAT | O_RDWR | O_NOFOLLOW, kVolDeckHALAudioBridgeFileMode)
+        : shm_open(VolDeckHALAudioBridgeName(), O_CREAT | O_RDWR, kVolDeckHALAudioBridgeFileMode);
+    if (descriptor == -1) {
+        return kAudioHardwareIllegalOperationError;
+    }
+
+    if (filePath != NULL) {
+        struct stat fileInfo;
+        if (fstat(descriptor, &fileInfo) != 0 || !S_ISREG(fileInfo.st_mode) || fileInfo.st_uid != geteuid()) {
+            close(descriptor);
+            return kAudioHardwareIllegalOperationError;
+        }
+    }
+
+    if (fchmod(descriptor, kVolDeckHALAudioBridgeFileMode) != 0) {
+        close(descriptor);
+        return kAudioHardwareIllegalOperationError;
+    }
+
+    if (ftruncate(descriptor, (off_t)mapSize) != 0) {
+        close(descriptor);
+        return kAudioHardwareIllegalOperationError;
+    }
+
+    void *mapping = mmap(NULL, mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0);
+    if (mapping == MAP_FAILED) {
+        close(descriptor);
+        return kAudioHardwareIllegalOperationError;
+    }
+
+    gVolDeckHALAudioBridgeDescriptor = descriptor;
+    gVolDeckHALAudioBridgeHeader = (VolDeckHALAudioBridgeHeader *)mapping;
+    gVolDeckHALAudioBridgeFrames = (UInt8 *)mapping + sizeof(VolDeckHALAudioBridgeHeader);
+    gVolDeckHALAudioBridgeMapSize = mapSize;
+    if (resetAfterMapping) {
+        VolDeckHALAudioBridgeResetMappedMemory();
+    }
+    return kAudioHardwareNoError;
+}
+
+static void VolDeckHALAudioBridgeUpdateSampleRate(void)
+{
+    if (gVolDeckHALAudioBridgeHeader == NULL) {
+        return;
+    }
+
+    VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->sampleRate, VolDeckHALCurrentSampleRate());
+}
+
+static void VolDeckHALAudioBridgeCopyFrames(UInt64 startFrameIndex, const UInt8 *source, UInt32 frameCount)
+{
+    UInt32 bytesPerFrame = VolDeckHALAudioBridgeBytesPerFrame();
+    UInt32 firstRingFrame = (UInt32)(startFrameIndex % kVolDeckHALAudioBridgeCapacityFrames);
+    UInt32 firstFrameCount = kVolDeckHALAudioBridgeCapacityFrames - firstRingFrame;
+    if (firstFrameCount > frameCount) {
+        firstFrameCount = frameCount;
+    }
+
+    size_t firstByteCount = (size_t)firstFrameCount * bytesPerFrame;
+    memcpy(gVolDeckHALAudioBridgeFrames + ((size_t)firstRingFrame * bytesPerFrame), source, firstByteCount);
+
+    UInt32 remainingFrames = frameCount - firstFrameCount;
+    if (remainingFrames > 0) {
+        memcpy(gVolDeckHALAudioBridgeFrames, source + firstByteCount, (size_t)remainingFrames * bytesPerFrame);
+    }
+}
+
+static OSStatus VolDeckHALAudioBridgeWrite(const void *sourceFrames, UInt32 frameCount, UInt64 hostTime)
+{
+    if (gVolDeckHALAudioBridgeHeader == NULL || gVolDeckHALAudioBridgeFrames == NULL || frameCount == 0) {
+        return gVolDeckHALAudioBridgeHeader == NULL || gVolDeckHALAudioBridgeFrames == NULL ? kAudioHardwareIllegalOperationError : kAudioHardwareNoError;
+    }
+
+    VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalWriteCalls, 1);
+    VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->lastHostTime, hostTime);
+
+    if (sourceFrames == NULL) {
+        VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalUnderrunFrames, frameCount);
+        VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->lastWriteFrames, 0);
+        return kAudioHardwareNoError;
+    }
+
+    UInt64 writeFrameIndex = VolDeckHALAtomicLoadUInt64(&gVolDeckHALAudioBridgeHeader->writeFrameIndex);
+    UInt64 readFrameIndex = VolDeckHALAtomicLoadUInt64(&gVolDeckHALAudioBridgeHeader->readFrameIndex);
+    UInt64 availableFrames = 0;
+    if (writeFrameIndex >= readFrameIndex) {
+        availableFrames = writeFrameIndex - readFrameIndex;
+    } else {
+        VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalIndexAnomalies, 1);
+        availableFrames = kVolDeckHALAudioBridgeCapacityFrames;
+    }
+    if (availableFrames > kVolDeckHALAudioBridgeCapacityFrames) {
+        availableFrames = kVolDeckHALAudioBridgeCapacityFrames;
+    }
+
+    UInt64 freeFrames = kVolDeckHALAudioBridgeCapacityFrames - availableFrames;
+    UInt32 framesToCopy = frameCount > freeFrames ? (UInt32)freeFrames : frameCount;
+    UInt64 droppedFrames = frameCount - framesToCopy;
+
+    if (droppedFrames > 0) {
+        VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalOverrunFrames, droppedFrames);
+        VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalFramesDropped, droppedFrames);
+    }
+
+    if (framesToCopy == 0) {
+        VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->lastWriteFrames, 0);
+        return kAudioHardwareNoError;
+    }
+
+    VolDeckHALAudioBridgeCopyFrames(writeFrameIndex, sourceFrames, framesToCopy);
+
+    VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalFramesWritten, framesToCopy);
+    VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->lastWriteFrames, framesToCopy);
+    VolDeckHALAtomicStoreUInt64(&gVolDeckHALAudioBridgeHeader->writeFrameIndex, writeFrameIndex + framesToCopy);
+    return kAudioHardwareNoError;
 }
 
 static AudioStreamBasicDescription VolDeckHALStreamDescription(Float64 sampleRate)
@@ -389,6 +682,12 @@ static OSStatus VolDeckHALInitialize(AudioServerPlugInDriverRef inDriver, AudioS
     atomic_store(&gVolDeckHALClockSeed, 1);
     atomic_store(&gVolDeckHALBufferFrameSize, kVolDeckHALDefaultBufferFrames);
     atomic_store(&gVolDeckHALNominalSampleRate, kVolDeckHALDefaultSampleRate);
+    OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped(false);
+    if (bridgeStatus != kAudioHardwareNoError) {
+        return bridgeStatus;
+    }
+
+    VolDeckHALAudioBridgeResetMappedMemory();
     return kAudioHardwareNoError;
 }
 
@@ -411,8 +710,18 @@ static OSStatus VolDeckHALDestroyDevice(AudioServerPlugInDriverRef inDriver, Aud
 static OSStatus VolDeckHALAddDeviceClient(AudioServerPlugInDriverRef inDriver, AudioObjectID inDeviceObjectID, const AudioServerPlugInClientInfo *inClientInfo)
 {
     (void)inDriver;
-    (void)inClientInfo;
-    return inDeviceObjectID == kVolDeckHALDeviceObjectID ? kAudioHardwareNoError : kAudioHardwareBadDeviceError;
+    if (inDeviceObjectID != kVolDeckHALDeviceObjectID) {
+        return kAudioHardwareBadDeviceError;
+    }
+
+    if (inClientInfo != NULL) {
+        OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped(true);
+        if (bridgeStatus != kAudioHardwareNoError) {
+            return bridgeStatus;
+        }
+    }
+
+    return kAudioHardwareNoError;
 }
 
 static OSStatus VolDeckHALRemoveDeviceClient(AudioServerPlugInDriverRef inDriver, AudioObjectID inDeviceObjectID, const AudioServerPlugInClientInfo *inClientInfo)
@@ -702,6 +1011,7 @@ static OSStatus VolDeckHALSetPropertyData(AudioServerPlugInDriverRef inDriver, A
 
         atomic_store(&gVolDeckHALNominalSampleRate, (UInt64)requestedSampleRate);
         atomic_fetch_add(&gVolDeckHALClockSeed, 1);
+        VolDeckHALAudioBridgeUpdateSampleRate();
         VolDeckHALNotifySampleRateProperties();
         return kAudioHardwareNoError;
     }
@@ -734,6 +1044,7 @@ static OSStatus VolDeckHALSetPropertyData(AudioServerPlugInDriverRef inDriver, A
 
         atomic_store(&gVolDeckHALNominalSampleRate, (UInt64)requestedDescription->mSampleRate);
         atomic_fetch_add(&gVolDeckHALClockSeed, 1);
+        VolDeckHALAudioBridgeUpdateSampleRate();
         VolDeckHALNotifySampleRateProperties();
         return kAudioHardwareNoError;
     }
@@ -845,16 +1156,21 @@ static OSStatus VolDeckHALDoIOOperation(AudioServerPlugInDriverRef inDriver, Aud
 {
     (void)inDriver;
     (void)inClientID;
-    (void)inIOBufferFrameSize;
-    (void)inIOCycleInfo;
-    (void)ioMainBuffer;
     (void)ioSecondaryBuffer;
 
     if (inDeviceObjectID != kVolDeckHALDeviceObjectID || inStreamObjectID != kVolDeckHALOutputStreamObjectID) {
         return kAudioHardwareBadDeviceError;
     }
 
-    return inOperationID == kAudioServerPlugInIOOperationWriteMix ? kAudioHardwareNoError : kAudioHardwareUnsupportedOperationError;
+    if (inOperationID != kAudioServerPlugInIOOperationWriteMix) {
+        return kAudioHardwareUnsupportedOperationError;
+    }
+
+    UInt64 hostTime = inIOCycleInfo != NULL ? inIOCycleInfo->mOutputTime.mHostTime : 0;
+    if (hostTime == 0) {
+        hostTime = mach_absolute_time();
+    }
+    return VolDeckHALAudioBridgeWrite(ioMainBuffer, inIOBufferFrameSize, hostTime);
 }
 
 static OSStatus VolDeckHALEndIOOperation(AudioServerPlugInDriverRef inDriver, AudioObjectID inDeviceObjectID, UInt32 inClientID, UInt32 inOperationID, UInt32 inIOBufferFrameSize, const AudioServerPlugInIOCycleInfo *inIOCycleInfo)
