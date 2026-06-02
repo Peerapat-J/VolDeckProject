@@ -75,7 +75,6 @@ private enum AudioBridgeError: Error {
 
 private let audioBridgeMagic: UInt32 = 0x56444247
 private let audioBridgeVersion: UInt32 = 1
-private let defaultAudioBridgeFilePath = "/tmp/com.peerapatj.voldeck.audio.bridge.v1"
 
 @_silgen_name("shm_open")
 private func cShmOpen(_ name: UnsafePointer<CChar>, _ oflag: CInt, _ mode: mode_t) -> CInt
@@ -131,7 +130,14 @@ private func audioBridgeFilePath() -> String? {
         return filePath
     }
 
-    return explicitAudioBridgeName() == nil ? defaultAudioBridgeFilePath : nil
+    guard explicitAudioBridgeName() == nil else {
+        return nil
+    }
+
+    return FileManager.default.temporaryDirectory
+        .appendingPathComponent("com.peerapatj.voldeck", isDirectory: true)
+        .appendingPathComponent("audio.bridge.v1")
+        .path
 }
 
 private func atomicLoad(_ value: UnsafePointer<UInt64>) -> UInt64 {

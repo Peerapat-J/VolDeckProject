@@ -70,12 +70,12 @@ starts, then `WriteMix` copies interleaved stereo Float32 output frames into the
 ring with atomics and bounded `memcpy` only. The callback does not allocate,
 perform file/network IO, log samples, or block waiting for the helper.
 
-The default runtime bridge is a guarded file-backed mapping at
-`/tmp/com.peerapatj.voldeck.audio.bridge.v1`. The HAL opens it owner-only,
-rejects symlinks/non-regular files/stale owners, and grants read/write access to
-the user ID of each device client outside the realtime path. Tests can override
-the bridge with `VOLDECK_AUDIO_BRIDGE_FILE_PATH`; `VOLDECK_AUDIO_BRIDGE_SHM_NAME`
-is available when a POSIX shared-memory object is explicitly needed.
+The default runtime bridge is a guarded owner-only file-backed mapping under the
+process private temporary directory (`com.peerapatj.voldeck/audio.bridge.v1`).
+The HAL rejects symlinks, non-regular files, stale owners, and group/world access
+on its bridge directory. Tests can override the bridge with
+`VOLDECK_AUDIO_BRIDGE_FILE_PATH`; `VOLDECK_AUDIO_BRIDGE_SHM_NAME` is available
+when a POSIX shared-memory object is explicitly needed.
 
 The helper can inspect the bridge with development commands:
 

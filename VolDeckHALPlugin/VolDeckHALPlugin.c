@@ -1,17 +1,16 @@
 #include <CoreAudio/AudioHardware.h>
 #include <CoreAudio/AudioServerPlugIn.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <errno.h>
 #include <fcntl.h>
-#include <libproc.h>
-#include <membership.h>
+#include <limits.h>
 #include <mach/mach_time.h>
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/acl.h>
 #include <sys/mman.h>
-#include <sys/proc_info.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -183,6 +182,53 @@ static Boolean VolDeckHALAudioBridgeUsesSharedMemoryName(void)
     return overrideName != NULL && overrideName[0] == '/' && strchr(overrideName + 1, '/') == NULL;
 }
 
+static const char *VolDeckHALAudioBridgeDefaultFilePath(void)
+{
+    static char bridgeDirectory[PATH_MAX];
+    static char bridgePath[PATH_MAX];
+    static Boolean didResolvePath = false;
+
+    if (didResolvePath) {
+        return bridgePath[0] != '\0' ? bridgePath : NULL;
+    }
+
+    didResolvePath = true;
+
+    char temporaryDirectory[PATH_MAX];
+    size_t temporaryDirectoryLength = confstr(_CS_DARWIN_USER_TEMP_DIR, temporaryDirectory, sizeof(temporaryDirectory));
+    if (temporaryDirectoryLength == 0 || temporaryDirectoryLength > sizeof(temporaryDirectory)) {
+        return NULL;
+    }
+
+    int directoryBytes = snprintf(bridgeDirectory, sizeof(bridgeDirectory), "%s%s", temporaryDirectory, "com.peerapatj.voldeck");
+    if (directoryBytes < 0 || (size_t)directoryBytes >= sizeof(bridgeDirectory)) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    if (mkdir(bridgeDirectory, S_IRWXU) != 0 && errno != EEXIST) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    struct stat directoryInfo;
+    if (stat(bridgeDirectory, &directoryInfo) != 0 ||
+        !S_ISDIR(directoryInfo.st_mode) ||
+        directoryInfo.st_uid != geteuid() ||
+        (directoryInfo.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+        bridgeDirectory[0] = '\0';
+        return NULL;
+    }
+
+    int pathBytes = snprintf(bridgePath, sizeof(bridgePath), "%s/%s", bridgeDirectory, "audio.bridge.v1");
+    if (pathBytes < 0 || (size_t)pathBytes >= sizeof(bridgePath)) {
+        bridgePath[0] = '\0';
+        return NULL;
+    }
+
+    return bridgePath;
+}
+
 static const char *VolDeckHALAudioBridgeFilePath(void)
 {
     const char *filePath = getenv("VOLDECK_AUDIO_BRIDGE_FILE_PATH");
@@ -190,7 +236,7 @@ static const char *VolDeckHALAudioBridgeFilePath(void)
         return filePath;
     }
 
-    return VolDeckHALAudioBridgeUsesSharedMemoryName() ? NULL : "/tmp/com.peerapatj.voldeck.audio.bridge.v1";
+    return VolDeckHALAudioBridgeUsesSharedMemoryName() ? NULL : VolDeckHALAudioBridgeDefaultFilePath();
 }
 
 static void VolDeckHALAudioBridgeResetMappedMemory(void)
@@ -217,6 +263,10 @@ static OSStatus VolDeckHALAudioBridgeEnsureMapped(void)
 
     size_t mapSize = VolDeckHALAudioBridgeMapBytes();
     const char *filePath = VolDeckHALAudioBridgeFilePath();
+    if (filePath == NULL && !VolDeckHALAudioBridgeUsesSharedMemoryName()) {
+        return kAudioHardwareIllegalOperationError;
+    }
+
     int descriptor = filePath != NULL
         ? open(filePath, O_CREAT | O_RDWR | O_NOFOLLOW, kVolDeckHALAudioBridgeFileMode)
         : shm_open(VolDeckHALAudioBridgeName(), O_CREAT | O_RDWR, kVolDeckHALAudioBridgeFileMode);
@@ -254,57 +304,6 @@ static OSStatus VolDeckHALAudioBridgeEnsureMapped(void)
     gVolDeckHALAudioBridgeMapSize = mapSize;
     VolDeckHALAudioBridgeResetMappedMemory();
     return kAudioHardwareNoError;
-}
-
-static uid_t VolDeckHALClientUserID(pid_t processID)
-{
-    struct proc_bsdinfo processInfo;
-    memset(&processInfo, 0, sizeof(processInfo));
-    int copiedBytes = proc_pidinfo(processID, PROC_PIDTBSDINFO, 0, &processInfo, sizeof(processInfo));
-    return copiedBytes == sizeof(processInfo) ? processInfo.pbi_uid : (uid_t)-1;
-}
-
-static Boolean VolDeckHALAudioBridgeGrantUserAccess(uid_t userID)
-{
-    if (gVolDeckHALAudioBridgeDescriptor == -1 || userID == (uid_t)-1) {
-        return false;
-    }
-
-    uuid_t userUUID;
-    if (mbr_uid_to_uuid(userID, userUUID) != 0) {
-        return false;
-    }
-
-    acl_t acl = acl_init(1);
-    if (acl == NULL) {
-        return false;
-    }
-
-    acl_entry_t entry;
-    if (acl_create_entry_np(&acl, &entry, 0) != 0) {
-        acl_free(acl);
-        return false;
-    }
-
-    if (acl_set_tag_type(entry, ACL_EXTENDED_ALLOW) != 0 || acl_set_qualifier(entry, &userUUID) != 0) {
-        acl_free(acl);
-        return false;
-    }
-
-    acl_permset_t permissions;
-    if (acl_get_permset(entry, &permissions) != 0) {
-        acl_free(acl);
-        return false;
-    }
-
-    (void)acl_add_perm(permissions, ACL_READ_DATA);
-    (void)acl_add_perm(permissions, ACL_WRITE_DATA);
-    (void)acl_add_perm(permissions, ACL_READ_ATTRIBUTES);
-    (void)acl_add_perm(permissions, ACL_WRITE_ATTRIBUTES);
-    (void)acl_set_permset(entry, permissions);
-    int result = acl_set_fd(gVolDeckHALAudioBridgeDescriptor, acl);
-    acl_free(acl);
-    return result == 0;
 }
 
 static void VolDeckHALAudioBridgeUpdateSampleRate(void)
@@ -710,10 +709,6 @@ static OSStatus VolDeckHALAddDeviceClient(AudioServerPlugInDriverRef inDriver, A
         OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped();
         if (bridgeStatus != kAudioHardwareNoError) {
             return bridgeStatus;
-        }
-
-        if (!VolDeckHALAudioBridgeGrantUserAccess(VolDeckHALClientUserID(inClientInfo->mProcessID))) {
-            return kAudioHardwareIllegalOperationError;
         }
     }
 
@@ -1162,7 +1157,10 @@ static OSStatus VolDeckHALDoIOOperation(AudioServerPlugInDriverRef inDriver, Aud
         return kAudioHardwareUnsupportedOperationError;
     }
 
-    UInt64 hostTime = inIOCycleInfo != NULL ? inIOCycleInfo->mInputTime.mHostTime : mach_absolute_time();
+    UInt64 hostTime = inIOCycleInfo != NULL ? inIOCycleInfo->mOutputTime.mHostTime : 0;
+    if (hostTime == 0) {
+        hostTime = mach_absolute_time();
+    }
     return VolDeckHALAudioBridgeWrite(ioMainBuffer, inIOBufferFrameSize, hostTime);
 }
 

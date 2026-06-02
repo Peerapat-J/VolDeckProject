@@ -342,6 +342,10 @@ static void TestAudioBridgeWritesOutputFrames(void)
 {
     Float32 frames[8 * kVolDeckHALStereoChannels];
     Float32 largeFrames[(kVolDeckHALAudioBridgeCapacityFrames + 16) * kVolDeckHALStereoChannels];
+    AudioServerPlugInIOCycleInfo cycleInfo;
+    memset(&cycleInfo, 0, sizeof(cycleInfo));
+    cycleInfo.mInputTime.mHostTime = 111;
+    cycleInfo.mOutputTime.mHostTime = 222;
 
     EXPECT_STATUS(VolDeckHALInitialize(&gVolDeckHALDriverInterfacePointer, NULL), kAudioHardwareNoError);
     EXPECT_TRUE(gVolDeckHALAudioBridgeHeader != NULL);
@@ -370,7 +374,7 @@ static void TestAudioBridgeWritesOutputFrames(void)
             1,
             kAudioServerPlugInIOOperationWriteMix,
             8,
-            NULL,
+            &cycleInfo,
             frames,
             NULL),
         kAudioHardwareNoError);
@@ -380,6 +384,7 @@ static void TestAudioBridgeWritesOutputFrames(void)
     EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalFramesWritten, 8);
     EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->totalWriteCalls, 1);
     EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->lastWriteFrames, 8);
+    EXPECT_UINT64(gVolDeckHALAudioBridgeHeader->lastHostTime, cycleInfo.mOutputTime.mHostTime);
     EXPECT_TRUE(memcmp(gVolDeckHALAudioBridgeFrames, frames, sizeof(frames)) == 0);
 
     EXPECT_STATUS(
