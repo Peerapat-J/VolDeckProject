@@ -77,6 +77,10 @@ on its bridge directory. Tests can override the bridge with
 `VOLDECK_AUDIO_BRIDGE_FILE_PATH`; `VOLDECK_AUDIO_BRIDGE_SHM_NAME` is available
 when a POSIX shared-memory object is explicitly needed.
 
+For test environments, `VOLDECK_AUDIO_BRIDGE_KEEP_SHM=1` keeps the
+`VOLDECK_AUDIO_BRIDGE_FILE_PATH` or `VOLDECK_AUDIO_BRIDGE_SHM_NAME` bridge alive
+after contract tests so helper probes can inspect post-run state.
+
 The helper can inspect the bridge with development commands:
 
 - `--buffer-status` reports metadata and counters only.

@@ -58,6 +58,7 @@ typedef struct {
     UInt64 lastWriteFrames;
     UInt64 lastReadFrames;
     UInt64 lastHostTime;
+    UInt64 totalIndexAnomalies;
 } VolDeckHALAudioBridgeHeader;
 
 static AudioServerPlugInHostRef gVolDeckHALHost = NULL;
@@ -255,7 +256,7 @@ static void VolDeckHALAudioBridgeResetMappedMemory(void)
     gVolDeckHALAudioBridgeHeader->sampleRate = VolDeckHALCurrentSampleRate();
 }
 
-static OSStatus VolDeckHALAudioBridgeEnsureMapped(void)
+static OSStatus VolDeckHALAudioBridgeEnsureMapped(Boolean resetAfterMapping)
 {
     if (gVolDeckHALAudioBridgeHeader != NULL && gVolDeckHALAudioBridgeFrames != NULL) {
         return kAudioHardwareNoError;
@@ -302,7 +303,9 @@ static OSStatus VolDeckHALAudioBridgeEnsureMapped(void)
     gVolDeckHALAudioBridgeHeader = (VolDeckHALAudioBridgeHeader *)mapping;
     gVolDeckHALAudioBridgeFrames = (UInt8 *)mapping + sizeof(VolDeckHALAudioBridgeHeader);
     gVolDeckHALAudioBridgeMapSize = mapSize;
-    VolDeckHALAudioBridgeResetMappedMemory();
+    if (resetAfterMapping) {
+        VolDeckHALAudioBridgeResetMappedMemory();
+    }
     return kAudioHardwareNoError;
 }
 
@@ -350,7 +353,13 @@ static OSStatus VolDeckHALAudioBridgeWrite(const void *sourceFrames, UInt32 fram
 
     UInt64 writeFrameIndex = VolDeckHALAtomicLoadUInt64(&gVolDeckHALAudioBridgeHeader->writeFrameIndex);
     UInt64 readFrameIndex = VolDeckHALAtomicLoadUInt64(&gVolDeckHALAudioBridgeHeader->readFrameIndex);
-    UInt64 availableFrames = writeFrameIndex >= readFrameIndex ? writeFrameIndex - readFrameIndex : kVolDeckHALAudioBridgeCapacityFrames;
+    UInt64 availableFrames = 0;
+    if (writeFrameIndex >= readFrameIndex) {
+        availableFrames = writeFrameIndex - readFrameIndex;
+    } else {
+        VolDeckHALAtomicFetchAddUInt64(&gVolDeckHALAudioBridgeHeader->totalIndexAnomalies, 1);
+        availableFrames = kVolDeckHALAudioBridgeCapacityFrames;
+    }
     if (availableFrames > kVolDeckHALAudioBridgeCapacityFrames) {
         availableFrames = kVolDeckHALAudioBridgeCapacityFrames;
     }
@@ -673,7 +682,7 @@ static OSStatus VolDeckHALInitialize(AudioServerPlugInDriverRef inDriver, AudioS
     atomic_store(&gVolDeckHALClockSeed, 1);
     atomic_store(&gVolDeckHALBufferFrameSize, kVolDeckHALDefaultBufferFrames);
     atomic_store(&gVolDeckHALNominalSampleRate, kVolDeckHALDefaultSampleRate);
-    OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped();
+    OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped(false);
     if (bridgeStatus != kAudioHardwareNoError) {
         return bridgeStatus;
     }
@@ -706,7 +715,7 @@ static OSStatus VolDeckHALAddDeviceClient(AudioServerPlugInDriverRef inDriver, A
     }
 
     if (inClientInfo != NULL) {
-        OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped();
+        OSStatus bridgeStatus = VolDeckHALAudioBridgeEnsureMapped(true);
         if (bridgeStatus != kAudioHardwareNoError) {
             return bridgeStatus;
         }

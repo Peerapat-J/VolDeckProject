@@ -22,6 +22,7 @@ private struct HelperEvent: Codable {
     var readCalls: UInt64? = nil
     var lastWriteFrames: UInt64? = nil
     var lastReadFrames: UInt64? = nil
+    var indexAnomalies: UInt64? = nil
 }
 
 private struct AudioBridgeHeader {
@@ -46,6 +47,7 @@ private struct AudioBridgeHeader {
     var lastWriteFrames: UInt64
     var lastReadFrames: UInt64
     var lastHostTime: UInt64
+    var totalIndexAnomalies: UInt64
 }
 
 private struct AudioBridgeStatus {
@@ -64,6 +66,7 @@ private struct AudioBridgeStatus {
     let readCalls: UInt64
     let lastWriteFrames: UInt64
     let lastReadFrames: UInt64
+    let indexAnomalies: UInt64
 }
 
 private enum AudioBridgeError: Error {
@@ -180,7 +183,8 @@ private func emit(
         writeCalls: bridgeStatus?.writeCalls,
         readCalls: bridgeStatus?.readCalls,
         lastWriteFrames: bridgeStatus?.lastWriteFrames,
-        lastReadFrames: bridgeStatus?.lastReadFrames
+        lastReadFrames: bridgeStatus?.lastReadFrames,
+        indexAnomalies: bridgeStatus?.indexAnomalies
     )
 
     outputLock.lock()
@@ -257,6 +261,9 @@ private func readAudioBridge(consumeFrameLimit: UInt64? = nil) throws -> AudioBr
     if let consumeFrameLimit {
         let framesToRead = min(framesAvailable, consumeFrameLimit)
         if framesToRead > 0 {
+            // This probe copies from mapping/readFrameIndex into scratch only to
+            // exercise framesToRead * bytesPerFrame movement without exposing
+            // audio contents.
             var scratch = Data(count: Int(framesToRead) * bytesPerFrame)
             scratch.withUnsafeMutableBytes { destination in
                 guard let destinationBase = destination.baseAddress else {
@@ -305,7 +312,8 @@ private func readAudioBridge(consumeFrameLimit: UInt64? = nil) throws -> AudioBr
         writeCalls: withUnsafePointer(to: &header.pointee.totalWriteCalls) { atomicLoad($0) },
         readCalls: withUnsafePointer(to: &header.pointee.totalReadCalls) { atomicLoad($0) },
         lastWriteFrames: withUnsafePointer(to: &header.pointee.lastWriteFrames) { atomicLoad($0) },
-        lastReadFrames: withUnsafePointer(to: &header.pointee.lastReadFrames) { atomicLoad($0) }
+        lastReadFrames: withUnsafePointer(to: &header.pointee.lastReadFrames) { atomicLoad($0) },
+        indexAnomalies: withUnsafePointer(to: &header.pointee.totalIndexAnomalies) { atomicLoad($0) }
     )
 }
 
@@ -390,8 +398,20 @@ if arguments.contains("--buffer-unlink") {
 
 if let readIndex = arguments.firstIndex(of: "--buffer-read-once") {
     let nextIndex = arguments.index(after: readIndex)
-    let requestedFrames = nextIndex < arguments.endIndex ? UInt64(arguments[nextIndex]) : nil
-    exit(emitAudioBridgeStatus(consumeFrameLimit: requestedFrames ?? 256))
+    let requestedFrames: UInt64
+    if nextIndex < arguments.endIndex {
+        let token = arguments[nextIndex]
+        guard let parsedFrames = UInt64(token) else {
+            emit(event: "buffer", state: "error", message: "Invalid --buffer-read-once frame count: \(token)")
+            exit(64)
+        }
+
+        requestedFrames = parsedFrames
+    } else {
+        requestedFrames = 256
+    }
+
+    exit(emitAudioBridgeStatus(consumeFrameLimit: requestedFrames))
 }
 
 if arguments.isEmpty || arguments.contains("--run") {
