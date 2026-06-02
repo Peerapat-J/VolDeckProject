@@ -10,6 +10,8 @@ leave the user with no sound, so every milestone has a safety gate.
 - Install, uninstall, and crash recovery must be designed before alpha release.
 - Driver/helper logs must help debug state without recording audio content.
 - Any permission added to the app requires an ADR.
+- Driver/HAL changes must keep the quality gates in `driver-quality-gates.md`
+  current; build-only validation is not enough for driver work.
 
 ## Milestone Gates
 
@@ -28,6 +30,9 @@ leave the user with no sound, so every milestone has a safety gate.
 
 ## M2 Required Pass/Fail Checks
 
+- [ ] HAL plugin contract tests pass.
+- [ ] HAL safety guard passes.
+- [ ] Xcode static analysis passes for driver-related targets.
 - [ ] Output device appears.
 - [ ] No input device appears.
 - [ ] No microphone permission prompt appears.

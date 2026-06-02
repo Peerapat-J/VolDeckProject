@@ -27,6 +27,9 @@ jobs:
       - name: List project schemes
         run: xcodebuild -list -project VolDeck.xcodeproj
 
+      - name: Run HAL safety guard
+        run: sh scripts/check_hal_safety.sh
+
       - name: Build VolDeck
         run: |
           xcodebuild \
@@ -36,3 +39,36 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Analyze VolDeck
+        run: |
+          xcodebuild \
+            -quiet \
+            -project VolDeck.xcodeproj \
+            -scheme VolDeck \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            analyze
+
+      - name: Build VolDeckHALPlugin
+        run: |
+          xcodebuild \
+            -quiet \
+            -project VolDeck.xcodeproj \
+            -target VolDeckHALPlugin \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Analyze VolDeckHALPlugin
+        run: |
+          xcodebuild \
+            -quiet \
+            -project VolDeck.xcodeproj \
+            -target VolDeckHALPlugin \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            analyze
+
+      - name: Run HAL contract tests
+        run: sh scripts/run_hal_contract_tests.sh

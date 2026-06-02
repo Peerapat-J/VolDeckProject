@@ -14,6 +14,8 @@
 		1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000005 /* AppVolumeRow.swift */; };
 		1A0000012D00000100000006 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000006 /* SettingsView.swift */; };
 		1A0000012D00000100000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000007 /* Assets.xcassets */; };
+		1B0000012D00000100000001 /* VolDeckHALPlugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 1B0000012D00000000000001 /* VolDeckHALPlugin.c */; };
+		1C0000012D00000100000001 /* VolDeckHALPluginContractTests.c in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,10 +27,29 @@
 		1A0000012D00000000000006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1A0000012D00000000000008 /* VolDeck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VolDeck.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B0000012D00000000000001 /* VolDeckHALPlugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = VolDeckHALPlugin.c; sourceTree = "<group>"; };
+		1B0000012D00000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1B0000012D00000000000003 /* VolDeckHALPlugin.driver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VolDeckHALPlugin.driver; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = VolDeckHALPluginContractTests.c; sourceTree = "<group>"; };
+		1C0000012D00000000000002 /* VolDeckHALPluginContractTests */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = VolDeckHALPluginContractTests; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		1A0000012D00000200000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B0000012D00000200000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1C0000012D00000200000002 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -42,6 +63,8 @@
 			isa = PBXGroup;
 			children = (
 				1A0000012D00000300000002 /* VolDeck */,
+				1B0000012D00000300000001 /* VolDeckHALPlugin */,
+				1C0000012D00000300000001 /* VolDeckHALPluginTests */,
 				1A0000012D00000300000006 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +111,27 @@
 			isa = PBXGroup;
 			children = (
 				1A0000012D00000000000008 /* VolDeck.app */,
+				1B0000012D00000000000003 /* VolDeckHALPlugin.driver */,
+				1C0000012D00000000000002 /* VolDeckHALPluginContractTests */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1B0000012D00000300000001 /* VolDeckHALPlugin */ = {
+			isa = PBXGroup;
+			children = (
+				1B0000012D00000000000001 /* VolDeckHALPlugin.c */,
+				1B0000012D00000000000002 /* Info.plist */,
+			);
+			path = VolDeckHALPlugin;
+			sourceTree = "<group>";
+		};
+		1C0000012D00000300000001 /* VolDeckHALPluginTests */ = {
+			isa = PBXGroup;
+			children = (
+				1C0000012D00000000000001 /* VolDeckHALPluginContractTests.c */,
+			);
+			path = VolDeckHALPluginTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +154,38 @@
 			productReference = 1A0000012D00000000000008 /* VolDeck.app */;
 			productType = "com.apple.product-type.application";
 		};
+		1B0000012D00000400000001 /* VolDeckHALPlugin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckHALPlugin" */;
+			buildPhases = (
+				1B0000012D00000200000001 /* Sources */,
+				1B0000012D00000200000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VolDeckHALPlugin;
+			productName = VolDeckHALPlugin;
+			productReference = 1B0000012D00000000000003 /* VolDeckHALPlugin.driver */;
+			productType = "com.apple.product-type.bundle";
+		};
+		1C0000012D00000400000001 /* VolDeckHALPluginContractTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckHALPluginContractTests" */;
+			buildPhases = (
+				1C0000012D00000200000001 /* Sources */,
+				1C0000012D00000200000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VolDeckHALPluginContractTests;
+			productName = VolDeckHALPluginContractTests;
+			productReference = 1C0000012D00000000000002 /* VolDeckHALPluginContractTests */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -125,7 +199,13 @@
 					1A0000012D00000400000001 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+				1B0000012D00000400000001 = {
+					CreatedOnToolsVersion = 26.5;
 				};
+				1C0000012D00000400000001 = {
+					CreatedOnToolsVersion = 26.5;
+				};
+			};
 			};
 			buildConfigurationList = 1A0000012D00000600000001 /* Build configuration list for PBXProject "VolDeck" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -141,6 +221,8 @@
 			projectRoot = "";
 			targets = (
 				1A0000012D00000400000001 /* VolDeck */,
+				1B0000012D00000400000001 /* VolDeckHALPlugin */,
+				1C0000012D00000400000001 /* VolDeckHALPluginContractTests */,
 			);
 		};
 /* End PBXProject section */
@@ -167,6 +249,22 @@
 				1A0000012D00000100000004 /* MenuBarRootView.swift in Sources */,
 				1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */,
 				1A0000012D00000100000006 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1B0000012D00000200000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B0000012D00000100000001 /* VolDeckHALPlugin.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1C0000012D00000200000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1C0000012D00000100000001 /* VolDeckHALPluginContractTests.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -343,6 +441,136 @@
 			};
 			name = Release;
 		};
+		1B0000012D00000600000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VolDeckHALPlugin/Info.plist;
+				INSTALL_PATH = "/Library/Audio/Plug-Ins/HAL";
+				MACH_O_TYPE = mh_bundle;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreAudio,
+					"-framework",
+					CoreFoundation,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.halplugin";
+				PRODUCT_NAME = VolDeckHALPlugin;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = (
+					"-Wall",
+					"-Wextra",
+					"-Werror",
+				);
+				WRAPPER_EXTENSION = driver;
+			};
+			name = Debug;
+		};
+		1B0000012D00000600000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VolDeckHALPlugin/Info.plist;
+				INSTALL_PATH = "/Library/Audio/Plug-Ins/HAL";
+				MACH_O_TYPE = mh_bundle;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreAudio,
+					"-framework",
+					CoreFoundation,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.halplugin";
+				PRODUCT_NAME = VolDeckHALPlugin;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = (
+					"-Wall",
+					"-Wextra",
+					"-Werror",
+				);
+				WRAPPER_EXTENSION = driver;
+			};
+			name = Release;
+		};
+		1C0000012D00000600000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreAudio,
+					"-framework",
+					CoreFoundation,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.halplugin.contract-tests";
+				PRODUCT_NAME = VolDeckHALPluginContractTests;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = (
+					"-Wall",
+					"-Wextra",
+					"-Werror",
+				);
+			};
+			name = Debug;
+		};
+		1C0000012D00000600000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CoreAudio,
+					"-framework",
+					CoreFoundation,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck.halplugin.contract-tests";
+				PRODUCT_NAME = VolDeckHALPluginContractTests;
+				SDKROOT = macosx;
+				WARNING_CFLAGS = (
+					"-Wall",
+					"-Wextra",
+					"-Werror",
+				);
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -360,6 +588,24 @@
 			buildConfigurations = (
 				1A0000012D00000600000005 /* Debug */,
 				1A0000012D00000600000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1B0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckHALPlugin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B0000012D00000600000002 /* Debug */,
+				1B0000012D00000600000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1C0000012D00000600000001 /* Build configuration list for PBXNativeTarget "VolDeckHALPluginContractTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C0000012D00000600000002 /* Debug */,
+				1C0000012D00000600000003 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
