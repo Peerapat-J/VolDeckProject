@@ -311,7 +311,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 5.5;
 			};
 			name = Debug;
 		};
@@ -339,7 +339,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.peerapatj.voldeck";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 5.5;
 			};
 			name = Release;
 		};

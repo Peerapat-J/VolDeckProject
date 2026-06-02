@@ -28,15 +28,14 @@ final class AppPreferences: ObservableObject {
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
-        defaults.set(isEnabled, forKey: Keys.launchAtLoginEnabled)
-        launchAtLoginEnabled = isEnabled
-
         do {
             if isEnabled {
                 try SMAppService.mainApp.register()
             } else {
                 try SMAppService.mainApp.unregister()
             }
+            defaults.set(isEnabled, forKey: Keys.launchAtLoginEnabled)
+            launchAtLoginEnabled = isEnabled
             refreshLaunchAtLoginStatus()
         } catch {
             launchAtLoginStatus = "Could not update login item: \(error.localizedDescription)"

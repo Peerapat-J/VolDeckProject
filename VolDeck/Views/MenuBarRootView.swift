@@ -73,9 +73,10 @@ struct MenuBarRootView: View {
     private var appList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(PlaceholderAudioApp.samples) { app in
+                ForEach(PlaceholderAudioApp.samples.indices, id: \.self) { index in
+                    let app = PlaceholderAudioApp.samples[index]
                     AppVolumeRow(app: app)
-                    if app.id != PlaceholderAudioApp.samples.last?.id {
+                    if index < PlaceholderAudioApp.samples.count - 1 {
                         Divider()
                             .padding(.leading, 54)
                     }
