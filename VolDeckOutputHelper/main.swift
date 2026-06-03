@@ -26,6 +26,7 @@ private struct HelperEvent: Codable {
     var lastReadFrames: UInt64? = nil
     var indexAnomalies: UInt64? = nil
     var estimatedBufferLatencyMilliseconds: Double? = nil
+    var bridgeFormatChanged: Bool? = nil
     var outputDeviceUID: String? = nil
     var outputDeviceName: String? = nil
     var outputDeviceSampleRate: UInt64? = nil
@@ -476,6 +477,7 @@ private func emit(
     message: String? = nil,
     bridgeStatus: AudioBridgeStatus? = nil,
     outputDevice: SelectedOutputDevice? = nil,
+    bridgeFormatChanged: Bool? = nil,
     playbackActive: Bool? = nil
 ) {
     let payload = HelperEvent(
@@ -501,6 +503,7 @@ private func emit(
         lastReadFrames: bridgeStatus?.lastReadFrames,
         indexAnomalies: bridgeStatus?.indexAnomalies,
         estimatedBufferLatencyMilliseconds: estimatedBufferLatencyMilliseconds(for: bridgeStatus),
+        bridgeFormatChanged: bridgeFormatChanged,
         outputDeviceUID: outputDevice?.uid,
         outputDeviceName: outputDevice?.name,
         outputDeviceSampleRate: outputDevice?.sampleRate,
@@ -782,6 +785,19 @@ private final class AudioBridgePlaybackReader {
         (try? Self.currentIdentity()) == identity
     }
 
+    var hasBridgeFormatChanged: Bool {
+        let currentSampleRate = withUnsafePointer(to: &header.pointee.sampleRate) { atomicLoad($0) }
+        return currentSampleRate != sampleRate ||
+            header.pointee.channelCount != channelCount ||
+            header.pointee.bytesPerFrame != bytesPerFrame
+    }
+
+    func storeSampleRateForTesting(_ newSampleRate: UInt64) {
+        withUnsafeMutablePointer(to: &header.pointee.sampleRate) {
+            atomicStore($0, newSampleRate)
+        }
+    }
+
     func readInterleavedFloat32(into destination: UnsafeMutablePointer<Float32>, requestedFrames: UInt32) -> UInt32 {
         guard requestedFrames > 0 else {
             return 0
@@ -976,6 +992,10 @@ private final class OutputPlaybackEngine {
         bridgeReader.isCurrentBridge
     }
 
+    var didBridgeFormatChange: Bool {
+        bridgeReader.hasBridgeFormatChanged
+    }
+
     private var isStopRequested: Bool {
         withUnsafePointer(to: &stopRequested) { atomicLoad($0) != 0 }
     }
@@ -1043,6 +1063,27 @@ private func unlinkAudioBridge() -> Int32 {
 
     emit(event: "buffer", state: "error", message: "Could not unlink VolDeck audio bridge")
     return 66
+}
+
+private func emitAudioBridgeSampleRateChangeProbe(_ newSampleRate: UInt64) -> Int32 {
+    do {
+        let reader = try AudioBridgePlaybackReader()
+        let originalSampleRate = reader.sampleRate
+        reader.storeSampleRateForTesting(newSampleRate)
+        let didChange = reader.hasBridgeFormatChanged
+        let status = try readAudioBridge()
+        emit(
+            event: "buffer",
+            state: didChange && status.sampleRate == newSampleRate ? "ok" : "error",
+            message: "Changed bridge sample rate from \(originalSampleRate) Hz to \(newSampleRate) Hz",
+            bridgeStatus: status,
+            bridgeFormatChanged: didChange
+        )
+        return didChange && status.sampleRate == newSampleRate ? 0 : 65
+    } catch {
+        emit(event: "buffer", state: "error", message: "Could not probe bridge sample-rate change: \(error)")
+        return 65
+    }
 }
 
 private func errorMessage(_ error: Error) -> String {
@@ -1122,6 +1163,21 @@ private func runHelper(playThrough: Bool = false, outputDeviceUID: String? = nil
             activeOutputDevice = nil
             lastWaitMessage = nil
             emit(event: "status", state: "running", message: "Waiting for VolDeck audio bridge", playbackActive: false)
+            continue
+        }
+
+        if let engine = playbackEngine, engine.didBridgeFormatChange {
+            engine.stop()
+            playbackEngine = nil
+            activeOutputDevice = nil
+            lastWaitMessage = nil
+            emit(
+                event: "status",
+                state: "running",
+                uptime: Date().timeIntervalSince(startedAt),
+                message: "VolDeck bridge format changed; restarting pass-through",
+                playbackActive: false
+            )
             continue
         }
 
@@ -1229,6 +1285,16 @@ if arguments.contains("--buffer-status") {
 
 if arguments.contains("--buffer-unlink") {
     exit(unlinkAudioBridge())
+}
+
+if let probeIndex = arguments.firstIndex(of: "--buffer-probe-sample-rate-change") {
+    let nextIndex = arguments.index(after: probeIndex)
+    guard nextIndex < arguments.endIndex, let sampleRate = UInt64(arguments[nextIndex]) else {
+        emit(event: "buffer", state: "error", message: "Missing or invalid --buffer-probe-sample-rate-change sample rate")
+        exit(64)
+    }
+
+    exit(emitAudioBridgeSampleRateChangeProbe(sampleRate))
 }
 
 if let readIndex = arguments.firstIndex(of: "--buffer-read-once") {

@@ -109,20 +109,22 @@ The #20/#21 slice keeps the helper alive while common output changes settle:
 
 - `--run --play-through` re-checks the selected output device while playback is
   active.
-- If System Default moves to a different real output, or if the active output's
-  sample rate, channel count, or buffer size changes, the helper tears down and
-  recreates playback instead of continuing against stale device state.
+- If System Default moves to a different real output, if the active output's
+  sample rate, channel count, or buffer size changes, or if the VolDeck bridge
+  sample rate changes in place, the helper tears down and recreates playback
+  instead of continuing against stale device state.
 - If an explicitly selected device disappears, the helper stops playback,
   reports a waiting status, and retries until the device returns or the user
   stops the helper.
 - AudioQueue enqueue failure is treated as a recoverable output disruption for
   this M3 slice; the helper goes back to waiting rather than exiting fatal.
 
-The app records the current real default output before starting the helper. If
-the helper exits unexpectedly, the app attempts to set that previous output UID
-back as the macOS default output and shows the restore result in diagnostics.
-When restore fails or no previous real output was available, diagnostics tell the
-user to choose a real device in System Settings > Sound.
+The app records the current real default output before starting the helper. If no
+real default output is available, it clears any stale restore target. If the
+helper exits unexpectedly, the app attempts to set that previous output UID back
+as the macOS default output and shows the restore result in diagnostics. When
+restore fails or no previous real output was available, diagnostics tell the user
+to choose a real device in System Settings > Sound.
 
 Sample-rate handling is intentionally conservative for M3: the helper recreates
 playback when device metadata changes and reports bridge/output sample-rate

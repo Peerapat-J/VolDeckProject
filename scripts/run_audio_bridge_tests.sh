@@ -122,6 +122,12 @@ assert_json_field "$status_output" underrunFrames 4
 assert_json_field "$status_output" indexAnomalies 0
 assert_json_latency_matches_bridge "$status_output"
 
+sample_rate_probe_output="$(VOLDECK_AUDIO_BRIDGE_FILE_PATH="$bridge_file" "$helper" --buffer-probe-sample-rate-change 44100)"
+assert_json_field "$sample_rate_probe_output" event buffer
+assert_json_field "$sample_rate_probe_output" state ok
+assert_json_field "$sample_rate_probe_output" sampleRate 44100
+assert_json_latency_matches_bridge "$sample_rate_probe_output"
+
 read_output="$(VOLDECK_AUDIO_BRIDGE_FILE_PATH="$bridge_file" "$helper" --buffer-read-once 256)"
 assert_json_field "$read_output" event buffer
 assert_json_field "$read_output" state ok

@@ -303,6 +303,8 @@ final class OutputHelperController: ObservableObject {
 
     private func rememberPreviousOutputForRecovery() {
         guard let outputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice() else {
+            defaults.removeObject(forKey: RecoveryKeys.previousOutputDeviceID)
+            defaults.removeObject(forKey: RecoveryKeys.previousOutputName)
             recoveryStatus = "No real default output was available to remember"
             return
         }
