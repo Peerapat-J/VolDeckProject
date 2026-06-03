@@ -20,6 +20,7 @@ xcodebuild \
 
 helper="$build_root/Debug/VolDeckOutputHelper"
 helper_timeout_seconds="${HELPER_TEST_TIMEOUT_SECONDS:-5}"
+helper_stop_delay_seconds="${HELPER_TEST_STOP_DELAY_SECONDS:-0.2}"
 
 health_output="$("$helper" --health-check)"
 printf '%s\n' "$health_output" | /usr/bin/grep '"event":"health"' >/dev/null
@@ -36,13 +37,14 @@ run_helper_with_stop() {
   run_name="$1"
   shift
 
-  run_input="$build_root/$run_name-input.jsonl"
   run_output_file="$build_root/$run_name-output.jsonl"
   run_timeout_marker="$build_root/$run_name-output.timeout"
   /bin/rm -f "$run_timeout_marker"
-  printf '%s\n' '{"command":"stop"}' >"$run_input"
 
-  "$helper" "$@" <"$run_input" >"$run_output_file" &
+  (
+    sleep "$helper_stop_delay_seconds"
+    printf '%s\n' '{"command":"stop"}'
+  ) | "$helper" "$@" >"$run_output_file" &
   run_pid=$!
 
   (

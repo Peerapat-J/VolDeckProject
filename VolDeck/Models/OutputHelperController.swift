@@ -24,6 +24,8 @@ final class OutputHelperController: ObservableObject {
     private var outputBuffer = ""
     private var expectedTermination = false
     private var terminationObserver: NSObjectProtocol?
+    private var restartAfterTermination = false
+    private var restartOutputDeviceUID: String?
 
     var statusText: String {
         if let processID {
@@ -172,8 +174,21 @@ final class OutputHelperController: ObservableObject {
         }
     }
 
+    func restart(outputDeviceUID: String? = nil) {
+        if canStart {
+            start(outputDeviceUID: outputDeviceUID)
+            return
+        }
+
+        restartAfterTermination = true
+        restartOutputDeviceUID = outputDeviceUID
+        stop()
+    }
+
     private func terminateForAppExit() {
         expectedTermination = true
+        restartAfterTermination = false
+        restartOutputDeviceUID = nil
         process?.terminate()
     }
 
@@ -256,7 +271,15 @@ final class OutputHelperController: ObservableObject {
             }
         }
 
+        let shouldRestart = restartAfterTermination
+        let nextOutputDeviceUID = restartOutputDeviceUID
+        restartAfterTermination = false
+        restartOutputDeviceUID = nil
         expectedTermination = false
+
+        if shouldRestart {
+            start(outputDeviceUID: nextOutputDeviceUID)
+        }
     }
 }
 

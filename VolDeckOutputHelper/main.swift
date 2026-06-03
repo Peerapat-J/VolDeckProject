@@ -47,6 +47,11 @@ private struct OutputDeviceInfo: Codable {
     let channelCount: UInt32
 }
 
+private struct OutputDeviceCandidate {
+    let id: AudioDeviceID
+    let info: OutputDeviceInfo
+}
+
 private struct SelectedOutputDevice {
     let id: AudioDeviceID
     let uid: String
@@ -98,6 +103,13 @@ private struct AudioBridgeStatus {
     let lastWriteFrames: UInt64
     let lastReadFrames: UInt64
     let indexAnomalies: UInt64
+}
+
+private struct AudioBridgeIdentity: Equatable {
+    let bridgeName: String
+    let device: UInt64
+    let inode: UInt64
+    let size: Int64
 }
 
 private enum AudioBridgeError: Error {
@@ -354,7 +366,7 @@ private func defaultOutputDeviceID() throws -> AudioDeviceID {
     return deviceID
 }
 
-private func outputDeviceInfos() throws -> [OutputDeviceInfo] {
+private func outputDeviceCandidates(includeVolDeck: Bool = false) throws -> [OutputDeviceCandidate] {
     let systemObject = AudioObjectID(kAudioObjectSystemObject)
     let dataSize = try audioObjectPropertyDataSize(
         objectID: systemObject,
@@ -378,89 +390,79 @@ private func outputDeviceInfos() throws -> [OutputDeviceInfo] {
     }
 
     let defaultID = try? defaultOutputDeviceID()
-    return try deviceIDs.compactMap { deviceID in
-        let channelCount = try outputChannelCount(for: deviceID)
-        guard channelCount > 0 else {
+    return deviceIDs.compactMap { deviceID in
+        do {
+            let channelCount = try outputChannelCount(for: deviceID)
+            guard channelCount > 0 else {
+                return nil
+            }
+
+            let uid = try audioObjectStringProperty(objectID: deviceID, selector: kAudioDevicePropertyDeviceUID)
+            guard includeVolDeck || uid != volDeckOutputDeviceUID else {
+                return nil
+            }
+
+            let name = try audioObjectStringProperty(objectID: deviceID, selector: kAudioObjectPropertyName)
+            let sampleRate = try audioObjectFloat64Property(
+                objectID: deviceID,
+                selector: kAudioDevicePropertyNominalSampleRate,
+                defaultValue: Float64(0)
+            )
+            let info = OutputDeviceInfo(
+                uid: uid,
+                name: name,
+                isDefault: defaultID == deviceID,
+                sampleRate: UInt64(sampleRate.rounded()),
+                channelCount: channelCount
+            )
+            return OutputDeviceCandidate(id: deviceID, info: info)
+        } catch {
             return nil
         }
-
-        let uid = try audioObjectStringProperty(objectID: deviceID, selector: kAudioDevicePropertyDeviceUID)
-        guard uid != volDeckOutputDeviceUID else {
-            return nil
-        }
-
-        let name = try audioObjectStringProperty(objectID: deviceID, selector: kAudioObjectPropertyName)
-        let sampleRate = try audioObjectFloat64Property(
-            objectID: deviceID,
-            selector: kAudioDevicePropertyNominalSampleRate,
-            defaultValue: Float64(0)
-        )
-        return OutputDeviceInfo(
-            uid: uid,
-            name: name,
-            isDefault: defaultID == deviceID,
-            sampleRate: UInt64(sampleRate.rounded()),
-            channelCount: channelCount
-        )
     }.sorted { lhs, rhs in
-        if lhs.isDefault != rhs.isDefault {
-            return lhs.isDefault
+        if lhs.info.isDefault != rhs.info.isDefault {
+            return lhs.info.isDefault
         }
-        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        return lhs.info.name.localizedStandardCompare(rhs.info.name) == .orderedAscending
     }
+}
+
+private func outputDeviceInfos(includeVolDeck: Bool = false) throws -> [OutputDeviceInfo] {
+    try outputDeviceCandidates(includeVolDeck: includeVolDeck).map(\.info)
 }
 
 private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedOutputDevice {
     let requestedUID = requestedUID == systemDefaultOutputDeviceUID ? nil : requestedUID
-    let deviceInfos = try outputDeviceInfos()
-    let selectedInfo: OutputDeviceInfo
+    let deviceCandidates = try outputDeviceCandidates()
+    let selectedCandidate: OutputDeviceCandidate
 
     if let requestedUID, !requestedUID.isEmpty {
-        guard let matchingInfo = deviceInfos.first(where: { $0.uid == requestedUID }) else {
+        guard let matchingCandidate = deviceCandidates.first(where: { $0.info.uid == requestedUID }) else {
             throw OutputDeviceError.noMatchingOutput(requestedUID)
         }
-        selectedInfo = matchingInfo
+        selectedCandidate = matchingCandidate
     } else {
-        guard let defaultInfo = deviceInfos.first(where: \.isDefault) else {
+        if let defaultCandidate = deviceCandidates.first(where: { $0.info.isDefault }) {
+            selectedCandidate = defaultCandidate
+        } else if try outputDeviceInfos(includeVolDeck: true).contains(where: { $0.isDefault && $0.uid == volDeckOutputDeviceUID }),
+                  let fallbackCandidate = deviceCandidates.first {
+            selectedCandidate = fallbackCandidate
+        } else {
             throw OutputDeviceError.noDefaultOutput
         }
-        selectedInfo = defaultInfo
-    }
-
-    let dataSize = try audioObjectPropertyDataSize(
-        objectID: AudioObjectID(kAudioObjectSystemObject),
-        selector: kAudioHardwarePropertyDevices
-    )
-    let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.stride
-    var address = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDevices,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
-    )
-    var mutableDataSize = dataSize
-    var deviceIDs = [AudioDeviceID](repeating: AudioDeviceID(kAudioObjectUnknown), count: deviceCount)
-    let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &mutableDataSize, &deviceIDs)
-    guard status == noErr else {
-        throw OutputDeviceError.coreAudio(status, "AudioObjectGetPropertyData(devices)")
-    }
-
-    guard let deviceID = try deviceIDs.first(where: {
-        try audioObjectStringProperty(objectID: $0, selector: kAudioDevicePropertyDeviceUID) == selectedInfo.uid
-    }) else {
-        throw OutputDeviceError.noMatchingOutput(selectedInfo.uid)
     }
 
     let bufferFrameSize = try audioObjectUInt32Property(
-        objectID: deviceID,
+        objectID: selectedCandidate.id,
         selector: kAudioDevicePropertyBufferFrameSize,
         defaultValue: UInt32(512)
     )
     return SelectedOutputDevice(
-        id: deviceID,
-        uid: selectedInfo.uid,
-        name: selectedInfo.name,
-        sampleRate: selectedInfo.sampleRate,
-        channelCount: selectedInfo.channelCount,
+        id: selectedCandidate.id,
+        uid: selectedCandidate.info.uid,
+        name: selectedCandidate.info.name,
+        sampleRate: selectedCandidate.info.sampleRate,
+        channelCount: selectedCandidate.info.channelCount,
         bufferFrameSize: max(128, bufferFrameSize)
     )
 }
@@ -662,6 +664,7 @@ private final class AudioBridgePlaybackReader {
     private let mapSize: Int
     private let header: UnsafeMutablePointer<AudioBridgeHeader>
     private let frames: UnsafeMutableRawPointer
+    private let identity: AudioBridgeIdentity
 
     let bridgeName: String
     let channelCount: UInt32
@@ -669,7 +672,7 @@ private final class AudioBridgePlaybackReader {
     let sampleRate: UInt64
     let capacityFrames: UInt32
 
-    init() throws {
+    private static func openDescriptor() throws -> (descriptor: CInt, bridgeName: String) {
         let name = audioBridgeName()
         let filePath = audioBridgeFilePath()
         let descriptor: CInt
@@ -681,14 +684,43 @@ private final class AudioBridgePlaybackReader {
         guard descriptor != -1 else {
             throw AudioBridgeError.openFailed
         }
+        return (descriptor, filePath ?? name)
+    }
 
+    private static func identity(for descriptor: CInt, bridgeName: String) throws -> AudioBridgeIdentity {
         var statBuffer = stat()
         guard fstat(descriptor, &statBuffer) == 0, statBuffer.st_size >= MemoryLayout<AudioBridgeHeader>.stride else {
-            close(descriptor)
             throw AudioBridgeError.statFailed
         }
+        return AudioBridgeIdentity(
+            bridgeName: bridgeName,
+            device: UInt64(statBuffer.st_dev),
+            inode: UInt64(statBuffer.st_ino),
+            size: Int64(statBuffer.st_size)
+        )
+    }
 
-        let mapSize = Int(statBuffer.st_size)
+    private static func currentIdentity() throws -> AudioBridgeIdentity {
+        let openedBridge = try openDescriptor()
+        defer {
+            close(openedBridge.descriptor)
+        }
+        return try identity(for: openedBridge.descriptor, bridgeName: openedBridge.bridgeName)
+    }
+
+    init() throws {
+        let openedBridge = try Self.openDescriptor()
+        let descriptor = openedBridge.descriptor
+
+        let identity: AudioBridgeIdentity
+        do {
+            identity = try Self.identity(for: descriptor, bridgeName: openedBridge.bridgeName)
+        } catch {
+            close(descriptor)
+            throw error
+        }
+
+        let mapSize = Int(identity.size)
         guard let mapping = mmap(nil, mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0), mapping != MAP_FAILED else {
             close(descriptor)
             throw AudioBridgeError.mapFailed
@@ -721,7 +753,8 @@ private final class AudioBridgePlaybackReader {
         self.mapSize = mapSize
         self.header = header
         self.frames = mapping.advanced(by: headerBytes)
-        self.bridgeName = filePath ?? name
+        self.identity = identity
+        self.bridgeName = openedBridge.bridgeName
         self.channelCount = header.pointee.channelCount
         self.bytesPerFrame = header.pointee.bytesPerFrame
         self.sampleRate = withUnsafePointer(to: &header.pointee.sampleRate) { atomicLoad($0) }
@@ -731,6 +764,10 @@ private final class AudioBridgePlaybackReader {
     deinit {
         munmap(mapping, mapSize)
         close(descriptor)
+    }
+
+    var isCurrentBridge: Bool {
+        (try? Self.currentIdentity()) == identity
     }
 
     func readInterleavedFloat32(into destination: UnsafeMutablePointer<Float32>, requestedFrames: UInt32) -> UInt32 {
@@ -923,6 +960,10 @@ private final class OutputPlaybackEngine {
         withUnsafePointer(to: &playbackFailure) { atomicLoad($0) != 0 }
     }
 
+    var isBridgeCurrent: Bool {
+        bridgeReader.isCurrentBridge
+    }
+
     private var isStopRequested: Bool {
         withUnsafePointer(to: &stopRequested) { atomicLoad($0) != 0 }
     }
@@ -1040,8 +1081,17 @@ private func runHelper(playThrough: Bool = false, outputDeviceUID: String? = nil
         }
 
         Thread.sleep(forTimeInterval: 1.0)
-        if let playbackEngine, playbackEngine.didFail {
-            playbackEngine.stop()
+        if let engine = playbackEngine, !engine.isBridgeCurrent {
+            engine.stop()
+            playbackEngine = nil
+            activeOutputDevice = nil
+            lastWaitMessage = nil
+            emit(event: "status", state: "running", message: "Waiting for VolDeck audio bridge", playbackActive: false)
+            continue
+        }
+
+        if let engine = playbackEngine, engine.didFail {
+            engine.stop()
             emit(
                 event: "status",
                 state: "error",

@@ -58,7 +58,13 @@ struct MenuBarRootView: View {
                 "Output",
                 selection: Binding(
                     get: { preferences.selectedOutputDeviceID },
-                    set: { preferences.selectOutputDevice(id: $0, from: outputOptions) }
+                    set: { newValue in
+                        let didChange = preferences.selectedOutputDeviceID != newValue
+                        preferences.selectOutputDevice(id: newValue, from: outputOptions)
+                        if didChange, outputHelper.canStop {
+                            outputHelper.restart(outputDeviceUID: preferences.selectedOutputDeviceID)
+                        }
+                    }
                 )
             ) {
                 ForEach(outputOptions, id: \.self) { option in
