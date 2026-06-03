@@ -24,6 +24,16 @@ assert_no_match() {
   fi
 }
 
+assert_match() {
+  pattern="$1"
+  path="$2"
+  message="$3"
+
+  if ! /usr/bin/grep -R -n -E "$pattern" "$path" >"$matches_file" 2>/dev/null; then
+    fail "$message"
+  fi
+}
+
 assert_plist_key_absent() {
   key="$1"
   plist="$2"
@@ -43,6 +53,10 @@ assert_no_match 'AudioObject(Get|Set)PropertyData|AudioDevice(Start|Stop|CreateI
 assert_no_match 'kAudioStreamTerminalType(HeadsetMicrophone|ReceiverMicrophone|Microphone)' 'VolDeckHALPlugin' 'HAL plugin must not publish microphone terminal types.'
 assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckOutputHelper' 'Output helper must not use network APIs or frameworks in the M3 pass-through path.'
 assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckHALPlugin' 'HAL plugin must not use network APIs or frameworks in the M2 output-only path.'
+
+assert_match 'restorePreviousOutputAfterUnexpectedTermination' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must attempt previous-output restore after unexpected helper termination.'
+assert_match 'AudioObjectSetPropertyData' 'VolDeck/Models/AppPreferences.swift' 'App output catalog must keep a CoreAudio default-output restore path.'
+assert_match 'System Settings > Sound' 'VolDeck/Models/OutputHelperController.swift' 'Restore failures must include manual Sound settings recovery instructions.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'
 assert_plist_key_absent 'AudioServerPlugIn_Network' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare network access.'

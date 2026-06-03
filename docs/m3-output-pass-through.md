@@ -6,7 +6,7 @@ consumes audio silently. M3 is the milestone that makes VolDeck audible by
 moving output frames to a helper and playing them through the selected real
 output device.
 
-Status checked: 2026-06-02 from GitHub milestone `Milestone 3: Output Pass-through`.
+Status checked: 2026-06-03 from GitHub milestone `Milestone 3: Output Pass-through`.
 
 ## Milestone Status
 
@@ -15,9 +15,9 @@ Status checked: 2026-06-02 from GitHub milestone `Milestone 3: Output Pass-throu
 | M2 prerequisite | Complete; PR #55 merged into `dev` |
 | M3 milestone | Open |
 | M3 due date | Not set |
-| Active work | #19 Forward audio to selected real output |
-| Open M3 issues | #19, #20, #21, #22 |
-| Closed M3 issues | #17, #18 |
+| Active work | #20 Handle sample-rate and device changes, #21 Restore previous output after helper crash, #22 Add diagnostics |
+| Open M3 issues | #20, #21, #22 |
+| Closed M3 issues | #17, #18, #19 |
 
 ## Covered Issues
 
@@ -25,10 +25,10 @@ Status checked: 2026-06-02 from GitHub milestone `Milestone 3: Output Pass-throu
 | --- | --- | --- |
 | #17 `[M3][helper] Create output playback helper` | Done, P0 | Create a helper process that can start, stop, and report health without requesting microphone or recording permissions. |
 | #18 `[M3][helper] Bridge HAL audio to helper buffer` | Done, P0 | Move HAL output frames into a helper-readable realtime-safe buffer without publishing an input device. |
-| #19 `[M3][audio] Forward audio to selected real output` | In progress, P0 | Play the received VolDeck stream through one selected physical output device. |
-| #20 `[M3][audio] Handle sample-rate and device changes` | Open, P1 | Keep pass-through resilient when sample rate, headphones, Bluetooth, or default output changes. |
-| #21 `[M3][recovery] Restore previous output after helper crash` | Open, P0 | Detect helper failure and attempt to restore the previously selected real output device. |
-| #22 `[M3][diagnostics] Add pass-through latency and underrun diagnostics` | Open, P1 | Track latency and buffer health without logging audio samples or content. |
+| #19 `[M3][audio] Forward audio to selected real output` | Done, P0 | Play the received VolDeck stream through one selected physical output device. |
+| #20 `[M3][audio] Handle sample-rate and device changes` | In progress, P1 | Keep pass-through resilient when sample rate, headphones, Bluetooth, or default output changes. |
+| #21 `[M3][recovery] Restore previous output after helper crash` | In progress, P0 | Detect helper failure and attempt to restore the previously selected real output device. |
+| #22 `[M3][diagnostics] Add pass-through latency and underrun diagnostics` | In progress, P1 | Track latency and buffer health without logging audio samples or content. |
 
 ## Recommended Work Order
 
@@ -103,6 +103,46 @@ into an output `AudioQueue`, and fills underruns with silence. This keeps the
 HAL side output-only and avoids logging audio sample contents. Device-change and
 sample-rate recovery remain #20 follow-up work.
 
+## Device Change and Recovery Path
+
+The #20/#21 slice keeps the helper alive while common output changes settle:
+
+- `--run --play-through` re-checks the selected output device while playback is
+  active.
+- If System Default moves to a different real output, or if the active output's
+  sample rate, channel count, or buffer size changes, the helper tears down and
+  recreates playback instead of continuing against stale device state.
+- If an explicitly selected device disappears, the helper stops playback,
+  reports a waiting status, and retries until the device returns or the user
+  stops the helper.
+- AudioQueue enqueue failure is treated as a recoverable output disruption for
+  this M3 slice; the helper goes back to waiting rather than exiting fatal.
+
+The app records the current real default output before starting the helper. If
+the helper exits unexpectedly, the app attempts to set that previous output UID
+back as the macOS default output and shows the restore result in diagnostics.
+When restore fails or no previous real output was available, diagnostics tell the
+user to choose a real device in System Settings > Sound.
+
+Sample-rate handling is intentionally conservative for M3: the helper recreates
+playback when device metadata changes and reports bridge/output sample-rate
+differences, while relying on `AudioQueue` format conversion for common
+mismatches. A custom resampler and hardware-matrix verification remain M9 QA
+follow-up work.
+
+## Pass-through Diagnostics
+
+The #22 slice exposes bridge counters and rough latency estimates without
+copying or logging audio sample contents:
+
+- Helper status events include buffered frames, underrun frames, overrun frames,
+  bridge sample rate, output sample rate, and estimated buffer latency in
+  milliseconds.
+- The latency estimate is metadata-only: `framesAvailable / sampleRate`.
+- App diagnostics summarize the latest helper event so silence, crackle, or
+  delay can be explained during development and later included in support bundle
+  work.
+
 ## Privacy Position
 
 M3 must preserve the M2 privacy contract:
@@ -124,13 +164,13 @@ dated rationale:
 
 - [ ] Audio plays through the selected real output.
 - [ ] Helper health is visible from the app or development command.
-- [ ] Helper crash or failed health check is detected.
-- [ ] Previous real output is stored before routing through VolDeck.
-- [ ] The app attempts to restore the previous real output after helper failure.
-- [ ] Failure to restore is visible with manual recovery instructions.
-- [ ] Buffer underrun/overrun counters exist.
-- [ ] Diagnostics do not log audio samples or content.
-- [ ] Device change and sample-rate limitations are documented.
+- [x] Helper crash or failed health check is detected.
+- [x] Previous real output is stored before routing through VolDeck.
+- [x] The app attempts to restore the previous real output after helper failure.
+- [x] Failure to restore is visible with manual recovery instructions.
+- [x] Buffer underrun/overrun counters exist.
+- [x] Diagnostics do not log audio samples or content.
+- [x] Device change and sample-rate limitations are documented.
 
 ## Validation Commands
 

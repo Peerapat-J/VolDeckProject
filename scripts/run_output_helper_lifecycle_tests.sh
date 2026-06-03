@@ -86,6 +86,11 @@ playthrough_output="$helper_run_output"
 printf '%s\n' "$playthrough_output" | /usr/bin/grep '"playbackActive":false' >/dev/null
 printf '%s\n' "$playthrough_output" | /usr/bin/grep 'Waiting for VolDeck audio bridge' >/dev/null
 
+run_helper_with_stop "missing-output" --run --play-through --output-device-uid "__voldeck_missing_output_for_tests__"
+missing_output="$helper_run_output"
+printf '%s\n' "$missing_output" | /usr/bin/grep '"playbackActive":false' >/dev/null
+printf '%s\n' "$missing_output" | /usr/bin/grep 'No output device matches UID __voldeck_missing_output_for_tests__' >/dev/null
+
 set +e
 error_output="$("$helper" --unsupported 2>/dev/null)"
 error_status=$?
