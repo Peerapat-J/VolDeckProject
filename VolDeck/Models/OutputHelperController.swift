@@ -271,7 +271,7 @@ final class OutputHelperController: ObservableObject {
         outputBuffer = ""
         processID = nil
 
-        if expectedTermination || terminatedProcess.terminationStatus == 0 {
+        if expectedTermination {
             state = .stopped
             lastMessage = "Helper stopped"
             recoveryStatus = "No recovery action needed"

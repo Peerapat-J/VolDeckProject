@@ -59,6 +59,7 @@ assert_match 'restorePreviousOutputAfterUnexpectedTermination' 'VolDeck/Models/O
 assert_match 'AudioObjectSetPropertyData' 'VolDeck/Models/AppPreferences.swift' 'App output catalog must keep a CoreAudio default-output restore path.'
 assert_match 'System Settings > Sound' 'VolDeck/Models/OutputHelperController.swift' 'Restore failures must include manual Sound settings recovery instructions.'
 assert_match 'removeObject\(forKey: RecoveryKeys\.previousOutputDeviceID\)' 'VolDeck/Models/OutputHelperController.swift' 'Previous-output recovery state must clear stale device IDs when no real default output can be remembered.'
+assert_no_match 'expectedTermination[[:space:]]*\|\|[[:space:]]*terminatedProcess\.terminationStatus[[:space:]]*==[[:space:]]*0' 'VolDeck/Models/OutputHelperController.swift' 'Unexpected zero-exit helper terminations must still run output recovery.'
 assert_match 'didBridgeFormatChange' 'VolDeckOutputHelper/main.swift' 'Output helper must restart playback when the bridge format changes in place.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'

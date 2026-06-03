@@ -15,9 +15,9 @@ Status checked: 2026-06-03 from GitHub milestone `Milestone 3: Output Pass-throu
 | M2 prerequisite | Complete; PR #55 merged into `dev` |
 | M3 milestone | Open |
 | M3 due date | Not set |
-| Active work | #20 Handle sample-rate and device changes, #21 Restore previous output after helper crash, #22 Add diagnostics |
-| Open M3 issues | #20, #21, #22 |
-| Closed M3 issues | #17, #18, #19 |
+| Active work | PR #59 review and merge for #20, #21, #22 |
+| Open M3 issues | None |
+| Closed M3 issues | #17, #18, #19, #20, #21, #22 |
 
 ## Covered Issues
 
@@ -26,9 +26,9 @@ Status checked: 2026-06-03 from GitHub milestone `Milestone 3: Output Pass-throu
 | #17 `[M3][helper] Create output playback helper` | Done, P0 | Create a helper process that can start, stop, and report health without requesting microphone or recording permissions. |
 | #18 `[M3][helper] Bridge HAL audio to helper buffer` | Done, P0 | Move HAL output frames into a helper-readable realtime-safe buffer without publishing an input device. |
 | #19 `[M3][audio] Forward audio to selected real output` | Done, P0 | Play the received VolDeck stream through one selected physical output device. |
-| #20 `[M3][audio] Handle sample-rate and device changes` | In progress, P1 | Keep pass-through resilient when sample rate, headphones, Bluetooth, or default output changes. |
-| #21 `[M3][recovery] Restore previous output after helper crash` | In progress, P0 | Detect helper failure and attempt to restore the previously selected real output device. |
-| #22 `[M3][diagnostics] Add pass-through latency and underrun diagnostics` | In progress, P1 | Track latency and buffer health without logging audio samples or content. |
+| #20 `[M3][audio] Handle sample-rate and device changes` | Done, P1 | Keep pass-through resilient when sample rate, headphones, Bluetooth, or default output changes. |
+| #21 `[M3][recovery] Restore previous output after helper crash` | Done, P0 | Detect helper failure and attempt to restore the previously selected real output device. |
+| #22 `[M3][diagnostics] Add pass-through latency and underrun diagnostics` | Done, P1 | Track latency and buffer health without logging audio samples or content. |
 
 ## Recommended Work Order
 
@@ -101,7 +101,7 @@ The #19 slice adds real output enumeration and playback startup in the helper:
 The helper maps the existing bridge once, feeds interleaved stereo Float32 frames
 into an output `AudioQueue`, and fills underruns with silence. This keeps the
 HAL side output-only and avoids logging audio sample contents. Device-change and
-sample-rate recovery remain #20 follow-up work.
+sample-rate recovery are handled in the #20 slice below.
 
 ## Device Change and Recovery Path
 
@@ -164,7 +164,7 @@ be handled as an ADR change before implementation.
 M3 is not complete until these checks are true or explicitly deferred with a
 dated rationale:
 
-- [ ] Audio plays through the selected real output.
+- [x] Audio plays through the selected real output.
 - [ ] Helper health is visible from the app or development command.
 - [x] Helper crash or failed health check is detected.
 - [x] Previous real output is stored before routing through VolDeck.
