@@ -20,50 +20,71 @@ xcodebuild \
 
 helper="$build_root/Debug/VolDeckOutputHelper"
 helper_timeout_seconds="${HELPER_TEST_TIMEOUT_SECONDS:-5}"
+helper_stop_delay_seconds="${HELPER_TEST_STOP_DELAY_SECONDS:-0.2}"
 
 health_output="$("$helper" --health-check)"
 printf '%s\n' "$health_output" | /usr/bin/grep '"event":"health"' >/dev/null
 printf '%s\n' "$health_output" | /usr/bin/grep '"state":"ok"' >/dev/null
 
-run_input="$build_root/run-input.jsonl"
-run_output_file="$build_root/run-output.jsonl"
-run_timeout_marker="$build_root/run-output.timeout"
-printf '%s\n' '{"command":"stop"}' >"$run_input"
+device_output="$("$helper" --list-output-devices)"
+printf '%s\n' "$device_output" | /usr/bin/grep '"event":"outputDevices"' >/dev/null
+printf '%s\n' "$device_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+printf '%s\n' "$device_output" | /usr/bin/grep '"devices":\[' >/dev/null
 
-"$helper" --run <"$run_input" >"$run_output_file" &
-run_pid=$!
+helper_run_output=""
 
-(
-  sleep "$helper_timeout_seconds"
-  if kill -0 "$run_pid" 2>/dev/null; then
-    : >"$run_timeout_marker"
-    kill "$run_pid" 2>/dev/null || true
+run_helper_with_stop() {
+  run_name="$1"
+  shift
+
+  run_output_file="$build_root/$run_name-output.jsonl"
+  run_timeout_marker="$build_root/$run_name-output.timeout"
+  /bin/rm -f "$run_timeout_marker"
+
+  (
+    sleep "$helper_stop_delay_seconds"
+    printf '%s\n' '{"command":"stop"}'
+  ) | "$helper" "$@" >"$run_output_file" &
+  run_pid=$!
+
+  (
+    sleep "$helper_timeout_seconds"
+    if kill -0 "$run_pid" 2>/dev/null; then
+      : >"$run_timeout_marker"
+      kill "$run_pid" 2>/dev/null || true
+    fi
+  ) &
+  watchdog_pid=$!
+
+  set +e
+  wait "$run_pid"
+  run_status=$?
+  set -e
+
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+
+  if [ -f "$run_timeout_marker" ]; then
+    printf 'VolDeckOutputHelper %s did not exit within %s seconds.\n' "$run_name" "$helper_timeout_seconds" >&2
+    exit 1
   fi
-) &
-watchdog_pid=$!
 
-set +e
-wait "$run_pid"
-run_status=$?
-set -e
+  if [ "$run_status" -ne 0 ]; then
+    printf 'VolDeckOutputHelper %s exited with status %s.\n' "$run_name" "$run_status" >&2
+    exit "$run_status"
+  fi
 
-kill "$watchdog_pid" 2>/dev/null || true
-wait "$watchdog_pid" 2>/dev/null || true
+  helper_run_output="$(/bin/cat "$run_output_file")"
+  printf '%s\n' "$helper_run_output" | /usr/bin/grep '"state":"starting"' >/dev/null
+  printf '%s\n' "$helper_run_output" | /usr/bin/grep '"state":"running"' >/dev/null
+  printf '%s\n' "$helper_run_output" | /usr/bin/grep '"state":"stopping"' >/dev/null
+}
 
-if [ -f "$run_timeout_marker" ]; then
-  printf 'VolDeckOutputHelper did not exit within %s seconds.\n' "$helper_timeout_seconds" >&2
-  exit 1
-fi
-
-if [ "$run_status" -ne 0 ]; then
-  printf 'VolDeckOutputHelper exited with status %s.\n' "$run_status" >&2
-  exit "$run_status"
-fi
-
-run_output="$(/bin/cat "$run_output_file")"
-printf '%s\n' "$run_output" | /usr/bin/grep '"state":"starting"' >/dev/null
-printf '%s\n' "$run_output" | /usr/bin/grep '"state":"running"' >/dev/null
-printf '%s\n' "$run_output" | /usr/bin/grep '"state":"stopping"' >/dev/null
+run_helper_with_stop "run" --run
+run_helper_with_stop "play-through" --run --play-through
+playthrough_output="$helper_run_output"
+printf '%s\n' "$playthrough_output" | /usr/bin/grep '"playbackActive":false' >/dev/null
+printf '%s\n' "$playthrough_output" | /usr/bin/grep 'Waiting for VolDeck audio bridge' >/dev/null
 
 set +e
 error_output="$("$helper" --unsupported 2>/dev/null)"

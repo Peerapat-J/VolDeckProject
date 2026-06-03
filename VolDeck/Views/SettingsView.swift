@@ -43,7 +43,7 @@ struct SettingsView: View {
 
                 HStack {
                     Button("Start Helper") {
-                        outputHelper.start()
+                        outputHelper.start(outputDeviceUID: preferences.selectedOutputDeviceID)
                     }
                     .disabled(!outputHelper.canStart)
 

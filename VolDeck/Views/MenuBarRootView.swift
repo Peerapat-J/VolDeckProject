@@ -5,13 +5,7 @@ struct MenuBarRootView: View {
     @ObservedObject var preferences: AppPreferences
     @ObservedObject var outputHelper: OutputHelperController
     @Environment(\.openSettings) private var openSettings
-
-    private let outputOptions = [
-        "System Default",
-        "Built-in Speakers",
-        "Headphones",
-        "External Display",
-    ]
+    @State private var outputOptions = [AudioOutputDeviceOption]()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +18,7 @@ struct MenuBarRootView: View {
             footer
         }
         .frame(width: 380)
+        .onAppear(perform: refreshOutputOptions)
     }
 
     private var header: some View {
@@ -59,13 +54,25 @@ struct MenuBarRootView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Picker("Output", selection: $preferences.selectedOutputName) {
+            Picker(
+                "Output",
+                selection: Binding(
+                    get: { preferences.selectedOutputDeviceID },
+                    set: { newValue in
+                        let didChange = preferences.selectedOutputDeviceID != newValue
+                        preferences.selectOutputDevice(id: newValue, from: outputOptions)
+                        if didChange, outputHelper.canStop {
+                            outputHelper.restart(outputDeviceUID: preferences.selectedOutputDeviceID)
+                        }
+                    }
+                )
+            ) {
                 ForEach(outputOptions, id: \.self) { option in
-                    Text(option).tag(option)
+                    Text(option.displayName).tag(option.id)
                 }
             }
             .labelsHidden()
-            .disabled(true)
+            .disabled(outputOptions.count <= 1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -106,6 +113,11 @@ struct MenuBarRootView: View {
             .buttonStyle(.borderless)
         }
         .padding(14)
+    }
+
+    private func refreshOutputOptions() {
+        outputOptions = AudioOutputDeviceCatalog.availableOutputDevices()
+        preferences.refreshSelectedOutputName(from: outputOptions)
     }
 }
 
