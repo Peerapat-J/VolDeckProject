@@ -58,7 +58,7 @@ final class OutputHelperController: ObservableObject {
         }
     }
 
-    func start() {
+    func start(outputDeviceUID: String? = nil) {
         guard canStart else {
             return
         }
@@ -77,7 +77,12 @@ final class OutputHelperController: ObservableObject {
         let inputPipe = Pipe()
 
         helperProcess.executableURL = helperURL
-        helperProcess.arguments = ["--run"]
+        var arguments = ["--run", "--play-through"]
+        if let outputDeviceUID,
+           outputDeviceUID != AudioOutputDeviceCatalog.systemDefaultOutputDeviceID {
+            arguments.append(contentsOf: ["--output-device-uid", outputDeviceUID])
+        }
+        helperProcess.arguments = arguments
         helperProcess.standardOutput = outputPipe
         helperProcess.standardError = errorPipe
         helperProcess.standardInput = inputPipe
@@ -200,7 +205,11 @@ final class OutputHelperController: ObservableObject {
         do {
             let event = try JSONDecoder().decode(HelperEvent.self, from: data)
             processID = event.pid
-            lastMessage = event.message ?? event.event
+            if let outputDeviceName = event.outputDeviceName, event.playbackActive == true {
+                lastMessage = event.message ?? "Forwarding to \(outputDeviceName)"
+            } else {
+                lastMessage = event.message ?? event.event
+            }
 
             switch event.state {
             case "starting":
@@ -239,7 +248,12 @@ final class OutputHelperController: ObservableObject {
             lastMessage = "Helper stopped"
         } else {
             state = .error
-            lastMessage = "Helper exited with status \(terminatedProcess.terminationStatus)"
+            let exitMessage = "Helper exited with status \(terminatedProcess.terminationStatus)"
+            if lastMessage.isEmpty || lastMessage == "Starting helper" {
+                lastMessage = exitMessage
+            } else if !lastMessage.contains(exitMessage) {
+                lastMessage = "\(lastMessage) (\(exitMessage))"
+            }
         }
 
         expectedTermination = false
@@ -251,4 +265,6 @@ private struct HelperEvent: Decodable {
     let state: String
     let pid: Int32
     let message: String?
+    let outputDeviceName: String?
+    let playbackActive: Bool?
 }

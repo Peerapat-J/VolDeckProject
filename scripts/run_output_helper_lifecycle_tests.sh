@@ -25,6 +25,11 @@ health_output="$("$helper" --health-check)"
 printf '%s\n' "$health_output" | /usr/bin/grep '"event":"health"' >/dev/null
 printf '%s\n' "$health_output" | /usr/bin/grep '"state":"ok"' >/dev/null
 
+device_output="$("$helper" --list-output-devices)"
+printf '%s\n' "$device_output" | /usr/bin/grep '"event":"outputDevices"' >/dev/null
+printf '%s\n' "$device_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+printf '%s\n' "$device_output" | /usr/bin/grep '"devices":\[' >/dev/null
+
 run_input="$build_root/run-input.jsonl"
 run_output_file="$build_root/run-output.jsonl"
 run_timeout_marker="$build_root/run-output.timeout"
