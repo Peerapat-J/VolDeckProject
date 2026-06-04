@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 struct HALAudioClientSession: Decodable, Identifiable, Equatable {
@@ -34,7 +35,7 @@ struct AudioSessionIdentityResolver {
     func resolve(session: HALAudioClientSession) -> AppAudioSession {
         let runningApp = NSRunningApplication(processIdentifier: pid_t(session.processID))
         let bundleIdentifier = runningApp?.bundleIdentifier ?? session.bundleIdentifier
-        let executablePath = runningApp?.executableURL?.path
+        let executablePath = Self.executablePath(runningApp: runningApp, processID: session.processID)
         let displayName = Self.displayName(
             runningApp: runningApp,
             executablePath: executablePath,
@@ -85,6 +86,27 @@ struct AudioSessionIdentityResolver {
         return "client:\(clientID)"
     }
 
+    static func executablePath(processID: Int32) -> String? {
+        guard processID > 0 else {
+            return nil
+        }
+
+        var pathBuffer = [CChar](repeating: 0, count: procPIDPathBufferSize)
+        let result = pathBuffer.withUnsafeMutableBufferPointer { bufferPointer in
+            guard let baseAddress = bufferPointer.baseAddress else {
+                return CInt(0)
+            }
+
+            return proc_pidpath(pid_t(processID), baseAddress, UInt32(bufferPointer.count))
+        }
+        guard result > 0 else {
+            return nil
+        }
+
+        let path = String(cString: pathBuffer)
+        return path.isEmpty ? nil : path
+    }
+
     private static func displayName(
         runningApp: NSRunningApplication?,
         executablePath: String?,
@@ -107,6 +129,17 @@ struct AudioSessionIdentityResolver {
         }
 
         return "Audio Client \(clientID)"
+    }
+
+    private static func executablePath(
+        runningApp: NSRunningApplication?,
+        processID: Int32
+    ) -> String? {
+        if let executablePath = runningApp?.executableURL?.path, !executablePath.isEmpty {
+            return executablePath
+        }
+
+        return executablePath(processID: processID)
     }
 
     private static func detail(
@@ -209,4 +242,6 @@ struct AudioSessionIdentityResolver {
         }
         return String(hash, radix: 16)
     }
+
+    private static let procPIDPathBufferSize = 4_096
 }

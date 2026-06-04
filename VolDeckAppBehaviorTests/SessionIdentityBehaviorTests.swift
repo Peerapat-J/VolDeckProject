@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 @main
@@ -39,6 +40,20 @@ struct SessionIdentityBehaviorTests {
             "client:42",
             "unknown fallback should not persist pid"
         )
+
+        let currentProcessID = Int32(Darwin.getpid())
+        guard let currentExecutablePath = AudioSessionIdentityResolver.executablePath(processID: currentProcessID) else {
+            fputs("error: executable path fallback should resolve the current process path\n", stderr)
+            Foundation.exit(1)
+        }
+        let currentProcessKey = AudioSessionIdentityResolver.stableIdentityKey(
+            bundleIdentifier: nil,
+            executablePath: currentExecutablePath,
+            processID: currentProcessID,
+            clientID: 303
+        )
+        assertTrue(currentProcessKey.hasPrefix("path:"), "resolved executable path should produce a path identity key")
+        assertTrue(!currentProcessKey.contains(currentExecutablePath), "path identity key should not persist the raw current executable path")
 
         let session = HALAudioClientSession(
             clientID: 7,
