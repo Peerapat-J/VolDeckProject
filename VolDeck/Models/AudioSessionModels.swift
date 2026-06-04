@@ -27,15 +27,8 @@ struct AppAudioSession: Identifiable {
 
 struct AudioSessionIdentityResolver {
     func resolve(sessions: [HALAudioClientSession]) -> [AppAudioSession] {
-        sessions
-            .map(resolve(session:))
-            .sorted { lhs, rhs in
-                let nameOrder = lhs.displayName.localizedStandardCompare(rhs.displayName)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return lhs.clientID < rhs.clientID
-            }
+        Self.collapsed(sessions: sessions.map(resolve(session:)))
+            .sorted(by: Self.areInDisplayOrder)
     }
 
     func resolve(session: HALAudioClientSession) -> AppAudioSession {
@@ -137,6 +130,75 @@ struct AudioSessionIdentityResolver {
         }
 
         return "\(state) - unknown process"
+    }
+
+    private static func collapsed(sessions: [AppAudioSession]) -> [AppAudioSession] {
+        var collapsedSessions = [String: AppAudioSession]()
+
+        for session in sessions {
+            guard let existingSession = collapsedSessions[session.id] else {
+                collapsedSessions[session.id] = session
+                continue
+            }
+
+            collapsedSessions[session.id] = collapsedSession(existingSession, session)
+        }
+
+        return Array(collapsedSessions.values)
+    }
+
+    private static func collapsedSession(
+        _ lhs: AppAudioSession,
+        _ rhs: AppAudioSession
+    ) -> AppAudioSession {
+        let preferredSession = preferredSession(lhs, rhs)
+
+        return AppAudioSession(
+            id: preferredSession.id,
+            clientID: preferredSession.clientID,
+            processID: preferredSession.processID,
+            displayName: preferredSession.displayName,
+            detail: preferredSession.detail,
+            bundleIdentifier: preferredSession.bundleIdentifier ?? lhs.bundleIdentifier ?? rhs.bundleIdentifier,
+            icon: preferredSession.icon ?? lhs.icon ?? rhs.icon,
+            isActive: lhs.isActive || rhs.isActive,
+            lastChangedHostTime: max(lhs.lastChangedHostTime, rhs.lastChangedHostTime)
+        )
+    }
+
+    private static func preferredSession(
+        _ lhs: AppAudioSession,
+        _ rhs: AppAudioSession
+    ) -> AppAudioSession {
+        if lhs.isActive != rhs.isActive {
+            return lhs.isActive ? lhs : rhs
+        }
+
+        if (lhs.icon == nil) != (rhs.icon == nil) {
+            return lhs.icon == nil ? rhs : lhs
+        }
+
+        if areInDisplayOrder(lhs, rhs) {
+            return lhs
+        }
+
+        return rhs
+    }
+
+    private static func areInDisplayOrder(
+        _ lhs: AppAudioSession,
+        _ rhs: AppAudioSession
+    ) -> Bool {
+        let nameOrder = lhs.displayName.localizedStandardCompare(rhs.displayName)
+        if nameOrder != .orderedSame {
+            return nameOrder == .orderedAscending
+        }
+
+        if lhs.clientID != rhs.clientID {
+            return lhs.clientID < rhs.clientID
+        }
+
+        return lhs.processID <= rhs.processID
     }
 
     private static func stablePathHash(_ path: String) -> String {

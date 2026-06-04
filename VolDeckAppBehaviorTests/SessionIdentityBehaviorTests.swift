@@ -51,6 +51,29 @@ struct SessionIdentityBehaviorTests {
         assertEqual(resolved.id, "bundle:com.example.HelperOwner", "CoreAudio bundle id should be used when NSRunningApplication is unavailable")
         assertEqual(resolved.bundleIdentifier, "com.example.HelperOwner", "resolved session should retain bundle id")
 
+        let collapsedSessions = AudioSessionIdentityResolver().resolve(
+            sessions: [
+                HALAudioClientSession(
+                    clientID: 11,
+                    processID: 900_011,
+                    bundleIdentifier: "com.example.Browser",
+                    active: false,
+                    lastChangedHostTime: 12
+                ),
+                HALAudioClientSession(
+                    clientID: 12,
+                    processID: 900_012,
+                    bundleIdentifier: "com.example.Browser",
+                    active: true,
+                    lastChangedHostTime: 24
+                )
+            ]
+        )
+        assertEqual(collapsedSessions.count, 1, "duplicate bundle identities should collapse to one app session")
+        assertEqual(collapsedSessions[0].id, "bundle:com.example.Browser", "collapsed app session should keep stable bundle identity")
+        assertTrue(collapsedSessions[0].isActive, "collapsed app session should preserve active state from any matching client")
+        assertEqual(collapsedSessions[0].lastChangedHostTime, 24, "collapsed app session should retain the newest activity timestamp")
+
         print("VolDeck session identity behavior tests passed")
     }
 
