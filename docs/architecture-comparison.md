@@ -119,6 +119,8 @@ Cons:
 ## Unknowns To Resolve
 
 - Can the chosen HAL/plugin boundary identify clients well enough for per-app gain?
+  M4 resolves the first half with app-side CoreAudio Process-object metadata for
+  active VolDeck output clients; M5 still needs mixer callback/gain proof.
 - Can audio be moved to a helper without blocking realtime callbacks?
 - Is shared memory/ring buffer transport stable enough for consumer use?
 - What install location and signing model are required for supported macOS versions?

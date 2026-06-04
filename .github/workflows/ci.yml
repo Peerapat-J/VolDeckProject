@@ -53,6 +53,9 @@ jobs:
       - name: Run app recovery behavior tests
         run: sh scripts/run_app_recovery_behavior_tests.sh
 
+      - name: Run session identity behavior tests
+        run: sh scripts/run_session_identity_behavior_tests.sh
+
       - name: Build VolDeckOutputHelper
         run: |
           xcodebuild \

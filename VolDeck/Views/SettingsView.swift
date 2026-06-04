@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var preferences: AppPreferences
     @ObservedObject var outputHelper: OutputHelperController
+    @ObservedObject var audioSessions: AudioSessionController
 
     var body: some View {
         TabView {
@@ -102,9 +103,10 @@ struct SettingsView: View {
                 LabeledContent("Helper message", value: outputHelper.lastMessage)
                 LabeledContent("Recovery", value: outputHelper.recoveryStatus)
                 LabeledContent("Buffer diagnostics", value: outputHelper.diagnosticsSummary)
+                LabeledContent("Session model", value: audioSessions.statusMessage)
                 LabeledContent("Privacy gate", value: "No permissions requested")
             } header: {
-                Text("M3 helper state")
+                Text("Runtime state")
             }
         }
         .formStyle(.grouped)
@@ -112,5 +114,9 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(preferences: AppPreferences(), outputHelper: OutputHelperController())
+    SettingsView(
+        preferences: AppPreferences(),
+        outputHelper: OutputHelperController(),
+        audioSessions: AudioSessionController()
+    )
 }

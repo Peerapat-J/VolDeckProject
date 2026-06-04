@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarRootView: View {
     @ObservedObject var preferences: AppPreferences
     @ObservedObject var outputHelper: OutputHelperController
+    @ObservedObject var audioSessions: AudioSessionController
     @Environment(\.openSettings) private var openSettings
     @State private var outputOptions = [AudioOutputDeviceOption]()
 
@@ -18,7 +19,19 @@ struct MenuBarRootView: View {
             footer
         }
         .frame(width: 380)
-        .onAppear(perform: refreshOutputOptions)
+        .onAppear {
+            refreshOutputOptions()
+        }
+        .task {
+            audioSessions.refresh()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else {
+                    break
+                }
+                audioSessions.refresh()
+            }
+        }
     }
 
     private var header: some View {
@@ -80,18 +93,57 @@ struct MenuBarRootView: View {
 
     private var appList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(PlaceholderAudioApp.samples.indices, id: \.self) { index in
-                    let app = PlaceholderAudioApp.samples[index]
-                    AppVolumeRow(app: app)
-                    if index < PlaceholderAudioApp.samples.count - 1 {
-                        Divider()
-                            .padding(.leading, 54)
+            if audioSessions.isRefreshing && audioSessions.sessions.isEmpty {
+                SessionListStateView(
+                    systemImage: "arrow.triangle.2.circlepath",
+                    title: "Scanning audio apps",
+                    detail: audioSessions.statusMessage
+                )
+            } else if audioSessions.sessions.isEmpty {
+                SessionListStateView(
+                    systemImage: "speaker.slash",
+                    title: "No active apps",
+                    detail: audioSessions.statusMessage
+                )
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(audioSessions.sessions.enumerated()), id: \.element.id) { index, session in
+                        AppVolumeRow(session: session)
+                        if index < audioSessions.sessions.count - 1 {
+                            Divider()
+                                .padding(.leading, 54)
+                        }
                     }
                 }
             }
         }
         .frame(height: 356)
+    }
+
+    private struct SessionListStateView: View {
+        let systemImage: String
+        let title: String
+        let detail: String
+
+        var body: some View {
+            VStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+
+                Text(title)
+                    .font(.subheadline)
+
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: 260)
+            }
+            .frame(maxWidth: .infinity, minHeight: 330)
+            .padding(14)
+        }
     }
 
     private var footer: some View {
@@ -122,5 +174,9 @@ struct MenuBarRootView: View {
 }
 
 #Preview {
-    MenuBarRootView(preferences: AppPreferences(), outputHelper: OutputHelperController())
+    MenuBarRootView(
+        preferences: AppPreferences(),
+        outputHelper: OutputHelperController(),
+        audioSessions: AudioSessionController()
+    )
 }

@@ -10,7 +10,8 @@
 		1A0000012D00000100000001 /* VolDeckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000001 /* VolDeckApp.swift */; };
 		1A0000012D00000100000002 /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000002 /* AppPreferences.swift */; };
 		1A0000012D00000100000009 /* OutputHelperController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000009 /* OutputHelperController.swift */; };
-		1A0000012D00000100000003 /* PlaceholderAudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000003 /* PlaceholderAudioApp.swift */; };
+		1A0000012D00000100000003 /* AudioSessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000003 /* AudioSessionModels.swift */; };
+		1A0000012D0000010000000A /* AudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D0000000000000A /* AudioSessionController.swift */; };
 		1A0000012D00000100000004 /* MenuBarRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000004 /* MenuBarRootView.swift */; };
 		1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000005 /* AppVolumeRow.swift */; };
 		1A0000012D00000100000006 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000012D00000000000006 /* SettingsView.swift */; };
@@ -50,7 +51,8 @@
 		1A0000012D00000000000001 /* VolDeckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolDeckApp.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000002 /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000009 /* OutputHelperController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputHelperController.swift; sourceTree = "<group>"; };
-		1A0000012D00000000000003 /* PlaceholderAudioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderAudioApp.swift; sourceTree = "<group>"; };
+		1A0000012D00000000000003 /* AudioSessionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionModels.swift; sourceTree = "<group>"; };
+		1A0000012D0000000000000A /* AudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionController.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000004 /* MenuBarRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRootView.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000005 /* AppVolumeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVolumeRow.swift; sourceTree = "<group>"; };
 		1A0000012D00000000000006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -125,7 +127,8 @@
 			children = (
 				1A0000012D00000000000002 /* AppPreferences.swift */,
 				1A0000012D00000000000009 /* OutputHelperController.swift */,
-				1A0000012D00000000000003 /* PlaceholderAudioApp.swift */,
+				1A0000012D00000000000003 /* AudioSessionModels.swift */,
+				1A0000012D0000000000000A /* AudioSessionController.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -319,7 +322,8 @@
 				1A0000012D00000100000001 /* VolDeckApp.swift in Sources */,
 				1A0000012D00000100000002 /* AppPreferences.swift in Sources */,
 				1A0000012D00000100000009 /* OutputHelperController.swift in Sources */,
-				1A0000012D00000100000003 /* PlaceholderAudioApp.swift in Sources */,
+				1A0000012D00000100000003 /* AudioSessionModels.swift in Sources */,
+				1A0000012D0000010000000A /* AudioSessionController.swift in Sources */,
 				1A0000012D00000100000004 /* MenuBarRootView.swift in Sources */,
 				1A0000012D00000100000005 /* AppVolumeRow.swift in Sources */,
 				1A0000012D00000100000006 /* SettingsView.swift in Sources */,

@@ -54,6 +54,18 @@ Track the active M3 issue set and detailed pass-through checklist in
 - [ ] Quit and crash recovery paths are documented.
 - [ ] Buffer underrun/overrun counters exist or are explicitly deferred with rationale.
 
+## M4 Required Pass/Fail Checks
+
+Track the active M4 issue set and detailed session-model checklist in
+`m4-app-detection-session-model.md`.
+
+- [ ] Active output clients can be discovered without capture APIs.
+- [ ] Session identity uses bundle id before fallback keys.
+- [ ] PID is not used as a durable app identity key.
+- [ ] Mixer rows are driven by live session metadata, not placeholders.
+- [ ] Empty and unavailable session states are visible.
+- [ ] Browser, helper, non-bundled, and unknown-client edge cases are documented.
+
 ## Install And Uninstall Checks
 
 - [ ] Installer records previous output device.
