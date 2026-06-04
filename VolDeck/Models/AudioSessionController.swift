@@ -31,7 +31,6 @@ final class AudioSessionController: ObservableObject {
             sessions = identityResolver.resolve(sessions: activeSessions)
             statusMessage = sessions.isEmpty ? "No active VolDeck audio apps" : "\(sessions.count) active audio app(s)"
         } catch {
-            sessions = []
             statusMessage = "Session scan unavailable: \(error.localizedDescription)"
         }
     }
