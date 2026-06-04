@@ -1,0 +1,108 @@
+import Darwin
+import Foundation
+
+@main
+struct SessionIdentityBehaviorTests {
+    static func main() {
+        assertEqual(
+            AudioSessionIdentityResolver.stableIdentityKey(
+                bundleIdentifier: "com.example.Player",
+                executablePath: "/Applications/Player.app/Contents/MacOS/Player",
+                processID: 101,
+                clientID: 1
+            ),
+            "bundle:com.example.Player",
+            "bundle id should be the durable identity key"
+        )
+
+        let firstPathKey = AudioSessionIdentityResolver.stableIdentityKey(
+            bundleIdentifier: nil,
+            executablePath: "/Applications/StandaloneTool",
+            processID: 101,
+            clientID: 1
+        )
+        let relaunchedPathKey = AudioSessionIdentityResolver.stableIdentityKey(
+            bundleIdentifier: nil,
+            executablePath: "/Applications/StandaloneTool",
+            processID: 202,
+            clientID: 2
+        )
+        assertEqual(firstPathKey, relaunchedPathKey, "path fallback should survive relaunch")
+        assertTrue(!firstPathKey.contains("/Applications/StandaloneTool"), "path fallback should not persist the raw executable path")
+
+        assertEqual(
+            AudioSessionIdentityResolver.stableIdentityKey(
+                bundleIdentifier: nil,
+                executablePath: nil,
+                processID: 303,
+                clientID: 42
+            ),
+            "client:42",
+            "unknown fallback should not persist pid"
+        )
+
+        let currentProcessID = Int32(Darwin.getpid())
+        guard let currentExecutablePath = AudioSessionIdentityResolver.executablePath(processID: currentProcessID) else {
+            fputs("error: executable path fallback should resolve the current process path\n", stderr)
+            Foundation.exit(1)
+        }
+        let currentProcessKey = AudioSessionIdentityResolver.stableIdentityKey(
+            bundleIdentifier: nil,
+            executablePath: currentExecutablePath,
+            processID: currentProcessID,
+            clientID: 303
+        )
+        assertTrue(currentProcessKey.hasPrefix("path:"), "resolved executable path should produce a path identity key")
+        assertTrue(!currentProcessKey.contains(currentExecutablePath), "path identity key should not persist the raw current executable path")
+
+        let session = HALAudioClientSession(
+            clientID: 7,
+            processID: 987_654,
+            bundleIdentifier: "com.example.HelperOwner",
+            active: true,
+            lastChangedHostTime: 10
+        )
+        let resolved = AudioSessionIdentityResolver().resolve(session: session)
+        assertEqual(resolved.id, "bundle:com.example.HelperOwner", "CoreAudio bundle id should be used when NSRunningApplication is unavailable")
+        assertEqual(resolved.bundleIdentifier, "com.example.HelperOwner", "resolved session should retain bundle id")
+
+        let collapsedSessions = AudioSessionIdentityResolver().resolve(
+            sessions: [
+                HALAudioClientSession(
+                    clientID: 11,
+                    processID: 900_011,
+                    bundleIdentifier: "com.example.Browser",
+                    active: false,
+                    lastChangedHostTime: 12
+                ),
+                HALAudioClientSession(
+                    clientID: 12,
+                    processID: 900_012,
+                    bundleIdentifier: "com.example.Browser",
+                    active: true,
+                    lastChangedHostTime: 24
+                )
+            ]
+        )
+        assertEqual(collapsedSessions.count, 1, "duplicate bundle identities should collapse to one app session")
+        assertEqual(collapsedSessions[0].id, "bundle:com.example.Browser", "collapsed app session should keep stable bundle identity")
+        assertTrue(collapsedSessions[0].isActive, "collapsed app session should preserve active state from any matching client")
+        assertEqual(collapsedSessions[0].lastChangedHostTime, 24, "collapsed app session should retain the newest activity timestamp")
+
+        print("VolDeck session identity behavior tests passed")
+    }
+
+    private static func assertEqual<T: Equatable>(_ actual: T, _ expected: T, _ scenario: String) {
+        guard actual == expected else {
+            fputs("error: \(scenario): expected \(expected), got \(actual)\n", stderr)
+            Foundation.exit(1)
+        }
+    }
+
+    private static func assertTrue(_ condition: Bool, _ scenario: String) {
+        guard condition else {
+            fputs("error: \(scenario)\n", stderr)
+            Foundation.exit(1)
+        }
+    }
+}
