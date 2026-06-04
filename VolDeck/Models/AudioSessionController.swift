@@ -21,17 +21,32 @@ final class AudioSessionController: ObservableObject {
     }
 
     func refresh() {
-        isRefreshing = true
-        defer {
-            isRefreshing = false
+        guard !isRefreshing else {
+            return
         }
 
-        do {
-            let activeSessions = try catalog.activeOutputSessions()
-            sessions = identityResolver.resolve(sessions: activeSessions)
-            statusMessage = sessions.isEmpty ? "No active VolDeck audio apps" : "\(sessions.count) active audio app(s)"
-        } catch {
-            statusMessage = "Session scan unavailable: \(error.localizedDescription)"
+        isRefreshing = true
+
+        Task(priority: .utility) { [catalog, identityResolver] in
+            let result: Result<[HALAudioClientSession], Error> = await Task.detached(priority: .utility) {
+                do {
+                    return .success(try catalog.activeOutputSessions())
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+
+            defer {
+                isRefreshing = false
+            }
+
+            switch result {
+            case .success(let activeSessions):
+                sessions = identityResolver.resolve(sessions: activeSessions)
+                statusMessage = sessions.isEmpty ? "No active VolDeck audio apps" : "\(sessions.count) active audio app(s)"
+            case .failure(let error):
+                statusMessage = "Session scan unavailable: \(error.localizedDescription)"
+            }
         }
     }
 }
