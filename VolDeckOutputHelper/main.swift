@@ -25,8 +25,11 @@ private struct HelperEvent: Codable {
     var lastWriteFrames: UInt64? = nil
     var lastReadFrames: UInt64? = nil
     var indexAnomalies: UInt64? = nil
+    var estimatedBufferLatencyMilliseconds: Double? = nil
+    var bridgeFormatChanged: Bool? = nil
     var outputDeviceUID: String? = nil
     var outputDeviceName: String? = nil
+    var outputDeviceSampleRate: UInt64? = nil
     var playbackActive: Bool? = nil
 }
 
@@ -431,6 +434,30 @@ private func outputDeviceInfos(includeVolDeck: Bool = false) throws -> [OutputDe
     try outputDeviceCandidates(includeVolDeck: includeVolDeck).map(\.info)
 }
 
+private func isSystemDefaultRequest(_ requestedUID: String?) -> Bool {
+    guard let requestedUID, !requestedUID.isEmpty else {
+        return true
+    }
+
+    return requestedUID == systemDefaultOutputDeviceUID
+}
+
+private func isVolDeckDefaultOutput() throws -> Bool {
+    try outputDeviceInfos(includeVolDeck: true).contains { $0.isDefault && $0.uid == volDeckOutputDeviceUID }
+}
+
+private func monitoredOutputDeviceUID(
+    requestedUID: String?,
+    activeOutputDeviceUID: String,
+    volDeckIsDefaultOutput: Bool
+) -> String? {
+    if isSystemDefaultRequest(requestedUID), volDeckIsDefaultOutput {
+        return activeOutputDeviceUID
+    }
+
+    return requestedUID
+}
+
 private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedOutputDevice {
     let requestedUID = requestedUID == systemDefaultOutputDeviceUID ? nil : requestedUID
     let deviceCandidates = try outputDeviceCandidates()
@@ -444,7 +471,7 @@ private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedO
     } else {
         if let defaultCandidate = deviceCandidates.first(where: { $0.info.isDefault }) {
             selectedCandidate = defaultCandidate
-        } else if try outputDeviceInfos(includeVolDeck: true).contains(where: { $0.isDefault && $0.uid == volDeckOutputDeviceUID }),
+        } else if try isVolDeckDefaultOutput(),
                   let fallbackCandidate = deviceCandidates.first {
             selectedCandidate = fallbackCandidate
         } else {
@@ -474,6 +501,7 @@ private func emit(
     message: String? = nil,
     bridgeStatus: AudioBridgeStatus? = nil,
     outputDevice: SelectedOutputDevice? = nil,
+    bridgeFormatChanged: Bool? = nil,
     playbackActive: Bool? = nil
 ) {
     let payload = HelperEvent(
@@ -498,8 +526,11 @@ private func emit(
         lastWriteFrames: bridgeStatus?.lastWriteFrames,
         lastReadFrames: bridgeStatus?.lastReadFrames,
         indexAnomalies: bridgeStatus?.indexAnomalies,
+        estimatedBufferLatencyMilliseconds: estimatedBufferLatencyMilliseconds(for: bridgeStatus),
+        bridgeFormatChanged: bridgeFormatChanged,
         outputDeviceUID: outputDevice?.uid,
         outputDeviceName: outputDevice?.name,
+        outputDeviceSampleRate: outputDevice?.sampleRate,
         playbackActive: playbackActive
     )
 
@@ -516,6 +547,14 @@ private func emit(
             FileHandle.standardError.write(data)
         }
     }
+}
+
+private func estimatedBufferLatencyMilliseconds(for bridgeStatus: AudioBridgeStatus?) -> Double? {
+    guard let bridgeStatus, bridgeStatus.sampleRate > 0 else {
+        return nil
+    }
+
+    return (Double(bridgeStatus.framesAvailable) / Double(bridgeStatus.sampleRate)) * 1_000.0
 }
 
 private func emitOutputDevices(_ devices: [OutputDeviceInfo], message: String) {
@@ -770,6 +809,19 @@ private final class AudioBridgePlaybackReader {
         (try? Self.currentIdentity()) == identity
     }
 
+    var hasBridgeFormatChanged: Bool {
+        let currentSampleRate = withUnsafePointer(to: &header.pointee.sampleRate) { atomicLoad($0) }
+        return currentSampleRate != sampleRate ||
+            header.pointee.channelCount != channelCount ||
+            header.pointee.bytesPerFrame != bytesPerFrame
+    }
+
+    func storeSampleRateForTesting(_ newSampleRate: UInt64) {
+        withUnsafeMutablePointer(to: &header.pointee.sampleRate) {
+            atomicStore($0, newSampleRate)
+        }
+    }
+
     func readInterleavedFloat32(into destination: UnsafeMutablePointer<Float32>, requestedFrames: UInt32) -> UInt32 {
         guard requestedFrames > 0 else {
             return 0
@@ -964,6 +1016,10 @@ private final class OutputPlaybackEngine {
         bridgeReader.isCurrentBridge
     }
 
+    var didBridgeFormatChange: Bool {
+        bridgeReader.hasBridgeFormatChanged
+    }
+
     private var isStopRequested: Bool {
         withUnsafePointer(to: &stopRequested) { atomicLoad($0) != 0 }
     }
@@ -976,6 +1032,36 @@ private final class OutputPlaybackEngine {
         withUnsafeMutablePointer(to: &playbackFailure) { atomicStore($0, 1) }
         requestStop()
     }
+}
+
+private func replacementOutputDeviceIfNeeded(
+    activeOutputDevice: SelectedOutputDevice,
+    requestedUID: String?
+) throws -> SelectedOutputDevice? {
+    let currentOutputDevice = try selectedOutputDevice(
+        uid: monitoredOutputDeviceUID(
+            requestedUID: requestedUID,
+            activeOutputDeviceUID: activeOutputDevice.uid,
+            volDeckIsDefaultOutput: isVolDeckDefaultOutput()
+        )
+    )
+
+    guard currentOutputDevice.uid != activeOutputDevice.uid ||
+          currentOutputDevice.sampleRate != activeOutputDevice.sampleRate ||
+          currentOutputDevice.channelCount != activeOutputDevice.channelCount ||
+          currentOutputDevice.bufferFrameSize != activeOutputDevice.bufferFrameSize else {
+        return nil
+    }
+
+    return currentOutputDevice
+}
+
+private func playbackStartMessage(outputDevice: SelectedOutputDevice, bridgeReader: AudioBridgePlaybackReader) -> String {
+    if outputDevice.sampleRate != bridgeReader.sampleRate {
+        return "Forwarding VolDeck audio to \(outputDevice.name); bridge \(bridgeReader.sampleRate) Hz, output \(outputDevice.sampleRate) Hz"
+    }
+
+    return "Forwarding VolDeck audio to \(outputDevice.name)"
 }
 
 private func emitAudioBridgeStatus(consumeFrameLimit: UInt64? = nil) -> Int32 {
@@ -1008,6 +1094,60 @@ private func unlinkAudioBridge() -> Int32 {
 
     emit(event: "buffer", state: "error", message: "Could not unlink VolDeck audio bridge")
     return 66
+}
+
+private func emitAudioBridgeSampleRateChangeProbe(_ newSampleRate: UInt64) -> Int32 {
+    do {
+        let reader = try AudioBridgePlaybackReader()
+        let originalSampleRate = reader.sampleRate
+        reader.storeSampleRateForTesting(newSampleRate)
+        let didChange = reader.hasBridgeFormatChanged
+        let status = try readAudioBridge()
+        emit(
+            event: "buffer",
+            state: didChange && status.sampleRate == newSampleRate ? "ok" : "error",
+            message: "Changed bridge sample rate from \(originalSampleRate) Hz to \(newSampleRate) Hz",
+            bridgeStatus: status,
+            bridgeFormatChanged: didChange
+        )
+        return didChange && status.sampleRate == newSampleRate ? 0 : 65
+    } catch {
+        emit(event: "buffer", state: "error", message: "Could not probe bridge sample-rate change: \(error)")
+        return 65
+    }
+}
+
+private func optionalUIDArgument(_ argument: String) -> String? {
+    argument == "__nil__" ? nil : argument
+}
+
+private func emitOutputSelectionProbe(
+    requestedUIDArgument: String,
+    activeUID: String,
+    volDeckDefaultArgument: String,
+    expectedUIDArgument: String
+) -> Int32 {
+    let volDeckIsDefaultOutput: Bool
+    switch volDeckDefaultArgument {
+    case "true":
+        volDeckIsDefaultOutput = true
+    case "false":
+        volDeckIsDefaultOutput = false
+    default:
+        emit(event: "outputSelectionProbe", state: "error", message: "Invalid output-selection probe default flag")
+        return 64
+    }
+
+    let expectedUID = optionalUIDArgument(expectedUIDArgument)
+    let resolvedUID = monitoredOutputDeviceUID(
+        requestedUID: optionalUIDArgument(requestedUIDArgument),
+        activeOutputDeviceUID: activeUID,
+        volDeckIsDefaultOutput: volDeckIsDefaultOutput
+    )
+    let state = resolvedUID == expectedUID ? "ok" : "error"
+    let message = resolvedUID.map { "Resolved output monitor UID \($0)" } ?? "Resolved output monitor UID nil"
+    emit(event: "outputSelectionProbe", state: state, message: message)
+    return state == "ok" ? 0 : 65
 }
 
 private func errorMessage(_ error: Error) -> String {
@@ -1067,7 +1207,7 @@ private func runHelper(playThrough: Bool = false, outputDeviceUID: String? = nil
                 emit(
                     event: "status",
                     state: "running",
-                    message: "Forwarding VolDeck audio to \(outputDevice.name)",
+                    message: playbackStartMessage(outputDevice: outputDevice, bridgeReader: bridgeReader),
                     outputDevice: outputDevice,
                     playbackActive: true
                 )
@@ -1090,24 +1230,79 @@ private func runHelper(playThrough: Bool = false, outputDeviceUID: String? = nil
             continue
         }
 
-        if let engine = playbackEngine, engine.didFail {
+        if let engine = playbackEngine, engine.didBridgeFormatChange {
             engine.stop()
+            playbackEngine = nil
+            activeOutputDevice = nil
+            lastWaitMessage = nil
             emit(
                 event: "status",
-                state: "error",
+                state: "running",
                 uptime: Date().timeIntervalSince(startedAt),
-                message: "Output pass-through stopped after AudioQueue enqueue failed",
-                outputDevice: activeOutputDevice,
+                message: "VolDeck bridge format changed; restarting pass-through",
                 playbackActive: false
             )
-            return 65
+            continue
+        }
+
+        if let engine = playbackEngine, engine.didFail {
+            engine.stop()
+            playbackEngine = nil
+            activeOutputDevice = nil
+            lastWaitMessage = nil
+            emit(
+                event: "status",
+                state: "running",
+                uptime: Date().timeIntervalSince(startedAt),
+                message: "Output pass-through paused after AudioQueue enqueue failed; waiting for output device to recover",
+                playbackActive: false
+            )
+            continue
+        }
+
+        if let currentOutputDevice = activeOutputDevice {
+            do {
+                if let replacementOutputDevice = try replacementOutputDeviceIfNeeded(
+                    activeOutputDevice: currentOutputDevice,
+                    requestedUID: outputDeviceUID
+                ) {
+                    playbackEngine?.stop()
+                    playbackEngine = nil
+                    activeOutputDevice = nil
+                    lastWaitMessage = nil
+                    emit(
+                        event: "status",
+                        state: "running",
+                        uptime: Date().timeIntervalSince(startedAt),
+                        message: "Output device changed to \(replacementOutputDevice.name); restarting pass-through",
+                        outputDevice: replacementOutputDevice,
+                        playbackActive: false
+                    )
+                    continue
+                }
+            } catch {
+                playbackEngine?.stop()
+                playbackEngine = nil
+                activeOutputDevice = nil
+                lastWaitMessage = nil
+                emit(
+                    event: "status",
+                    state: "running",
+                    uptime: Date().timeIntervalSince(startedAt),
+                    message: "Waiting for output pass-through: \(errorMessage(error))",
+                    playbackActive: false
+                )
+                continue
+            }
         }
 
         if !stopFlag.isRequested {
+            let heartbeatBridgeStatus = playbackEngine == nil ? nil : try? readAudioBridge()
             emit(
                 event: "heartbeat",
                 state: "running",
                 uptime: Date().timeIntervalSince(startedAt),
+                bridgeStatus: heartbeatBridgeStatus,
                 outputDevice: activeOutputDevice,
                 playbackActive: playbackEngine != nil
             )
@@ -1154,6 +1349,34 @@ if arguments.contains("--buffer-status") {
 
 if arguments.contains("--buffer-unlink") {
     exit(unlinkAudioBridge())
+}
+
+if let probeIndex = arguments.firstIndex(of: "--buffer-probe-sample-rate-change") {
+    let nextIndex = arguments.index(after: probeIndex)
+    guard nextIndex < arguments.endIndex, let sampleRate = UInt64(arguments[nextIndex]) else {
+        emit(event: "buffer", state: "error", message: "Missing or invalid --buffer-probe-sample-rate-change sample rate")
+        exit(64)
+    }
+
+    exit(emitAudioBridgeSampleRateChangeProbe(sampleRate))
+}
+
+if let probeIndex = arguments.firstIndex(of: "--output-selection-probe") {
+    guard arguments.distance(from: probeIndex, to: arguments.endIndex) >= 5 else {
+        emit(event: "outputSelectionProbe", state: "error", message: "Missing --output-selection-probe arguments")
+        exit(64)
+    }
+
+    let requestedIndex = arguments.index(after: probeIndex)
+    let activeIndex = arguments.index(requestedIndex, offsetBy: 1)
+    let defaultIndex = arguments.index(activeIndex, offsetBy: 1)
+    let expectedIndex = arguments.index(defaultIndex, offsetBy: 1)
+    exit(emitOutputSelectionProbe(
+        requestedUIDArgument: arguments[requestedIndex],
+        activeUID: arguments[activeIndex],
+        volDeckDefaultArgument: arguments[defaultIndex],
+        expectedUIDArgument: arguments[expectedIndex]
+    ))
 }
 
 if let readIndex = arguments.firstIndex(of: "--buffer-read-once") {

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 @MainActor
@@ -16,6 +17,8 @@ final class OutputHelperController: ObservableObject {
     @Published private(set) var lastMessage: String = "Helper has not started"
     @Published private(set) var lastHeartbeat: Date?
     @Published private(set) var helperLocation: String = "Not resolved"
+    @Published private(set) var recoveryStatus: String = "No recovery action needed"
+    @Published private(set) var diagnosticsSummary: String = "No buffer diagnostics yet"
 
     private var process: Process?
     private var standardInput: Pipe?
@@ -26,6 +29,12 @@ final class OutputHelperController: ObservableObject {
     private var terminationObserver: NSObjectProtocol?
     private var restartAfterTermination = false
     private var restartOutputDeviceUID: String?
+    private let defaults: UserDefaults
+
+    private enum RecoveryKeys {
+        static let previousOutputDeviceID = "previousOutputDeviceID"
+        static let previousOutputName = "previousOutputName"
+    }
 
     var statusText: String {
         if let processID {
@@ -42,7 +51,8 @@ final class OutputHelperController: ObservableObject {
         process != nil && state != .stopping
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -95,6 +105,7 @@ final class OutputHelperController: ObservableObject {
         lastHeartbeat = nil
         helperLocation = helperURL.path
         expectedTermination = false
+        rememberPreviousOutputForRecovery(fallbackOutputDeviceUID: outputDeviceUID)
         standardInput = inputPipe
         self.outputPipe = outputPipe
         self.errorPipe = errorPipe
@@ -225,6 +236,9 @@ final class OutputHelperController: ObservableObject {
             } else {
                 lastMessage = event.message ?? event.event
             }
+            if let diagnosticsSummary = event.diagnosticsSummary {
+                self.diagnosticsSummary = diagnosticsSummary
+            }
 
             switch event.state {
             case "starting":
@@ -258,9 +272,10 @@ final class OutputHelperController: ObservableObject {
         outputBuffer = ""
         processID = nil
 
-        if expectedTermination || terminatedProcess.terminationStatus == 0 {
+        if expectedTermination {
             state = .stopped
             lastMessage = "Helper stopped"
+            recoveryStatus = "No recovery action needed"
         } else {
             state = .error
             let exitMessage = "Helper exited with status \(terminatedProcess.terminationStatus)"
@@ -268,6 +283,11 @@ final class OutputHelperController: ObservableObject {
                 lastMessage = exitMessage
             } else if !lastMessage.contains(exitMessage) {
                 lastMessage = "\(lastMessage) (\(exitMessage))"
+            }
+
+            recoveryStatus = restorePreviousOutputAfterUnexpectedTermination()
+            if !lastMessage.contains(recoveryStatus) {
+                lastMessage = "\(lastMessage). \(recoveryStatus)"
             }
         }
 
@@ -281,6 +301,47 @@ final class OutputHelperController: ObservableObject {
             start(outputDeviceUID: nextOutputDeviceUID)
         }
     }
+
+    private func rememberPreviousOutputForRecovery(fallbackOutputDeviceUID: String? = nil) {
+        let defaultOutputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice()
+        let fallbackOutputDevice = AudioOutputDeviceCatalog.realOutputDevice(id: fallbackOutputDeviceUID)
+        if let recoveryTarget = Self.recoveryTarget(defaultOutputDevice: defaultOutputDevice, fallbackOutputDevice: fallbackOutputDevice) {
+            let statusPrefix = defaultOutputDevice == nil ? "Recovery target from selected output" : "Recovery target"
+            rememberRecoveryTarget(recoveryTarget, statusPrefix: statusPrefix)
+        } else {
+            defaults.removeObject(forKey: RecoveryKeys.previousOutputDeviceID)
+            defaults.removeObject(forKey: RecoveryKeys.previousOutputName)
+            recoveryStatus = "No real default output was available to remember"
+        }
+    }
+
+    static func recoveryTarget(
+        defaultOutputDevice: AudioOutputDeviceOption?,
+        fallbackOutputDevice: AudioOutputDeviceOption?
+    ) -> AudioOutputDeviceOption? {
+        defaultOutputDevice ?? fallbackOutputDevice
+    }
+
+    private func rememberRecoveryTarget(_ outputDevice: AudioOutputDeviceOption, statusPrefix: String) {
+        defaults.set(outputDevice.id, forKey: RecoveryKeys.previousOutputDeviceID)
+        defaults.set(outputDevice.displayName, forKey: RecoveryKeys.previousOutputName)
+        recoveryStatus = "\(statusPrefix): \(outputDevice.displayName)"
+    }
+
+    private func restorePreviousOutputAfterUnexpectedTermination() -> String {
+        guard let previousOutputID = defaults.string(forKey: RecoveryKeys.previousOutputDeviceID),
+              !previousOutputID.isEmpty else {
+            return "Helper failed. Open System Settings > Sound and choose a real output device."
+        }
+
+        let previousName = defaults.string(forKey: RecoveryKeys.previousOutputName) ?? previousOutputID
+        do {
+            let restoredDevice = try AudioOutputDeviceCatalog.setDefaultOutputDevice(id: previousOutputID)
+            return "Restored output to \(restoredDevice.displayName)"
+        } catch {
+            return "Could not restore \(previousName): \(error.localizedDescription). Open System Settings > Sound and choose a real output device."
+        }
+    }
 }
 
 private struct HelperEvent: Decodable {
@@ -288,6 +349,35 @@ private struct HelperEvent: Decodable {
     let state: String
     let pid: Int32
     let message: String?
+    let sampleRate: UInt64?
+    let framesAvailable: UInt64?
+    let overrunFrames: UInt64?
+    let underrunFrames: UInt64?
+    let estimatedBufferLatencyMilliseconds: Double?
     let outputDeviceName: String?
+    let outputDeviceSampleRate: UInt64?
     let playbackActive: Bool?
+
+    var diagnosticsSummary: String? {
+        var parts = [String]()
+        if let estimatedBufferLatencyMilliseconds {
+            parts.append(String(format: "latency %.1f ms", estimatedBufferLatencyMilliseconds))
+        }
+        if let framesAvailable {
+            parts.append("\(framesAvailable) frame(s) buffered")
+        }
+        if let underrunFrames {
+            parts.append("\(underrunFrames) underrun frame(s)")
+        }
+        if let overrunFrames {
+            parts.append("\(overrunFrames) overrun frame(s)")
+        }
+        if let sampleRate, let outputDeviceSampleRate {
+            parts.append("bridge \(sampleRate) Hz / output \(outputDeviceSampleRate) Hz")
+        } else if let sampleRate {
+            parts.append("bridge \(sampleRate) Hz")
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " | ")
+    }
 }

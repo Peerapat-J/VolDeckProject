@@ -31,6 +31,18 @@ printf '%s\n' "$device_output" | /usr/bin/grep '"event":"outputDevices"' >/dev/n
 printf '%s\n' "$device_output" | /usr/bin/grep '"state":"ok"' >/dev/null
 printf '%s\n' "$device_output" | /usr/bin/grep '"devices":\[' >/dev/null
 
+selection_probe_output="$("$helper" --output-selection-probe "__system_default__" "active-real-output" true "active-real-output")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
+selection_probe_output="$("$helper" --output-selection-probe "__system_default__" "active-real-output" false "__system_default__")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
+selection_probe_output="$("$helper" --output-selection-probe "explicit-real-output" "active-real-output" true "explicit-real-output")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
 helper_run_output=""
 
 run_helper_with_stop() {
@@ -85,6 +97,11 @@ run_helper_with_stop "play-through" --run --play-through
 playthrough_output="$helper_run_output"
 printf '%s\n' "$playthrough_output" | /usr/bin/grep '"playbackActive":false' >/dev/null
 printf '%s\n' "$playthrough_output" | /usr/bin/grep 'Waiting for VolDeck audio bridge' >/dev/null
+
+run_helper_with_stop "missing-output" --run --play-through --output-device-uid "__voldeck_missing_output_for_tests__"
+missing_output="$helper_run_output"
+printf '%s\n' "$missing_output" | /usr/bin/grep '"playbackActive":false' >/dev/null
+printf '%s\n' "$missing_output" | /usr/bin/grep 'No output device matches UID __voldeck_missing_output_for_tests__' >/dev/null
 
 set +e
 error_output="$("$helper" --unsupported 2>/dev/null)"

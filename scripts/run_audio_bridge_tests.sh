@@ -68,6 +68,36 @@ assert_json_field() {
   fi
 }
 
+assert_json_latency_matches_bridge() {
+  json_payload="$1"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf 'error: python3 is required to validate latency JSON output.\n' >&2
+    exit 1
+  fi
+
+  JSON_PAYLOAD="$json_payload" python3 -c '
+import json
+import os
+import sys
+
+data = json.loads(os.environ["JSON_PAYLOAD"])
+frames = data.get("framesAvailable")
+sample_rate = data.get("sampleRate")
+latency = data.get("estimatedBufferLatencyMilliseconds")
+if not isinstance(frames, int) or not isinstance(sample_rate, int) or sample_rate <= 0 or not isinstance(latency, (int, float)):
+    print("error: bridge latency fields are missing or invalid", file=sys.stderr)
+    print("payload: " + os.environ["JSON_PAYLOAD"], file=sys.stderr)
+    sys.exit(1)
+
+expected = (float(frames) / float(sample_rate)) * 1000.0
+if abs(float(latency) - expected) > 0.001:
+    print(f"error: expected estimatedBufferLatencyMilliseconds={expected}, got {latency}", file=sys.stderr)
+    print("payload: " + os.environ["JSON_PAYLOAD"], file=sys.stderr)
+    sys.exit(1)
+'
+}
+
 require_executable "$helper" "VolDeckOutputHelper"
 require_executable "$contract_tests" "VolDeckHALPluginContractTests"
 
@@ -90,6 +120,13 @@ assert_json_field "$status_output" writeCalls 3
 assert_json_field "$status_output" overrunFrames 24
 assert_json_field "$status_output" underrunFrames 4
 assert_json_field "$status_output" indexAnomalies 0
+assert_json_latency_matches_bridge "$status_output"
+
+sample_rate_probe_output="$(VOLDECK_AUDIO_BRIDGE_FILE_PATH="$bridge_file" "$helper" --buffer-probe-sample-rate-change 44100)"
+assert_json_field "$sample_rate_probe_output" event buffer
+assert_json_field "$sample_rate_probe_output" state ok
+assert_json_field "$sample_rate_probe_output" sampleRate 44100
+assert_json_latency_matches_bridge "$sample_rate_probe_output"
 
 read_output="$(VOLDECK_AUDIO_BRIDGE_FILE_PATH="$bridge_file" "$helper" --buffer-read-once 256)"
 assert_json_field "$read_output" event buffer
@@ -98,5 +135,6 @@ assert_json_field "$read_output" framesRead 256
 assert_json_field "$read_output" readCalls 1
 assert_json_field "$read_output" lastReadFrames 256
 assert_json_field "$read_output" framesAvailable 7936
+assert_json_latency_matches_bridge "$read_output"
 
 printf 'VolDeck audio bridge tests passed\n'

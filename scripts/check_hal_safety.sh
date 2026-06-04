@@ -24,6 +24,16 @@ assert_no_match() {
   fi
 }
 
+assert_match() {
+  pattern="$1"
+  path="$2"
+  message="$3"
+
+  if ! /usr/bin/grep -R -n -E "$pattern" "$path" >"$matches_file" 2>/dev/null; then
+    fail "$message"
+  fi
+}
+
 assert_plist_key_absent() {
   key="$1"
   plist="$2"
@@ -37,12 +47,25 @@ assert_plist_key_absent() {
 assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeck' 'Core app target must not add capture or microphone usage-description keys.'
 assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeckOutputHelper' 'Output helper must not add capture or microphone usage-description keys.'
 assert_no_match 'NS(Microphone|AudioCapture|Camera|ScreenCapture)UsageDescription' 'VolDeckHALPlugin' 'HAL plugin must not add capture or microphone usage-description keys.'
+assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeck' 'Core app target must not use network APIs in the local-first M3 path.'
 assert_no_match 'ScreenCaptureKit|AVCapture|CGRequestScreenCaptureAccess|CGPreflightScreenCaptureAccess|AudioHardwareCreate(ProcessTap|AggregateDevice)|CATapDescription' 'VolDeckOutputHelper' 'Output helper must not use capture-oriented APIs in the M3 pass-through path.'
 assert_no_match 'ScreenCaptureKit|AVCapture|CGRequestScreenCaptureAccess|CGPreflightScreenCaptureAccess|AudioHardwareCreate(ProcessTap|AggregateDevice)|CATapDescription' 'VolDeckHALPlugin' 'HAL plugin must not use capture-oriented APIs in the M2 output-only path.'
 assert_no_match 'AudioObject(Get|Set)PropertyData|AudioDevice(Start|Stop|CreateIOProcID)' 'VolDeckHALPlugin' 'AudioServerPlugIn code must not call HAL client APIs from inside the plugin host.'
 assert_no_match 'kAudioStreamTerminalType(HeadsetMicrophone|ReceiverMicrophone|Microphone)' 'VolDeckHALPlugin' 'HAL plugin must not publish microphone terminal types.'
 assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckOutputHelper' 'Output helper must not use network APIs or frameworks in the M3 pass-through path.'
 assert_no_match 'NSURLSession|NSURLConnection|dataTaskWithURL|URLSession|NSURL|CFNetwork|CFSocket|Network\.framework|Network/Network\.h|NW(Connection|Listener|Endpoint|Path|Parameters|Protocol|Browser)|nw_[[:alnum:]_]+[[:space:]]*\(|socket[[:space:]]*\(|getaddrinfo[[:space:]]*\(|connect[[:space:]]*\(|send[[:space:]]*\(|recv[[:space:]]*\(|curl_easy_[[:alnum:]_]+' 'VolDeckHALPlugin' 'HAL plugin must not use network APIs or frameworks in the M2 output-only path.'
+
+assert_match 'restorePreviousOutputAfterUnexpectedTermination' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must attempt previous-output restore after unexpected helper termination.'
+assert_match 'AudioObjectSetPropertyData' 'VolDeck/Models/AppPreferences.swift' 'App output catalog must keep a CoreAudio default-output restore path.'
+assert_match 'System Settings > Sound' 'VolDeck/Models/OutputHelperController.swift' 'Restore failures must include manual Sound settings recovery instructions.'
+assert_match 'removeObject\(forKey: RecoveryKeys\.previousOutputDeviceID\)' 'VolDeck/Models/OutputHelperController.swift' 'Previous-output recovery state must clear stale device IDs when no real default output can be remembered.'
+assert_match 'rememberPreviousOutputForRecovery\(fallbackOutputDeviceUID: outputDeviceUID\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must fall back to the selected real output as the recovery target.'
+assert_match 'realOutputDevice\(id: fallbackOutputDeviceUID\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must resolve the selected output before clearing recovery state.'
+assert_match 'recoveryTarget\(defaultOutputDevice: defaultOutputDevice, fallbackOutputDevice: fallbackOutputDevice\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must keep recovery target selection covered by behavior tests.'
+assert_no_match 'expectedTermination[[:space:]]*\|\|[[:space:]]*terminatedProcess\.terminationStatus[[:space:]]*==[[:space:]]*0' 'VolDeck/Models/OutputHelperController.swift' 'Unexpected zero-exit helper terminations must still run output recovery.'
+assert_match 'didBridgeFormatChange' 'VolDeckOutputHelper/main.swift' 'Output helper must restart playback when the bridge format changes in place.'
+assert_match 'monitoredOutputDeviceUID' 'VolDeckOutputHelper/main.swift' 'Output helper must centralize monitored output selection for behavior testing.'
+assert_match 'activeOutputDeviceUID: activeOutputDevice\.uid' 'VolDeckOutputHelper/main.swift' 'Output helper must preserve the active real output instead of falling back to the first device when VolDeck becomes default.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'
 assert_plist_key_absent 'AudioServerPlugIn_Network' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare network access.'

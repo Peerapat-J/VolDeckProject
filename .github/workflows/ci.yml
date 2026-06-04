@@ -50,6 +50,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             analyze
 
+      - name: Run app recovery behavior tests
+        run: sh scripts/run_app_recovery_behavior_tests.sh
+
       - name: Build VolDeckOutputHelper
         run: |
           xcodebuild \

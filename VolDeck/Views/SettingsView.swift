@@ -100,6 +100,8 @@ struct SettingsView: View {
                 LabeledContent("Selected output", value: preferences.selectedOutputName)
                 LabeledContent("Helper location", value: outputHelper.helperLocation)
                 LabeledContent("Helper message", value: outputHelper.lastMessage)
+                LabeledContent("Recovery", value: outputHelper.recoveryStatus)
+                LabeledContent("Buffer diagnostics", value: outputHelper.diagnosticsSummary)
                 LabeledContent("Privacy gate", value: "No permissions requested")
             } header: {
                 Text("M3 helper state")
