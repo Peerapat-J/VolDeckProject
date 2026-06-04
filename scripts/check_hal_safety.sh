@@ -63,6 +63,8 @@ assert_match 'rememberPreviousOutputForRecovery\(fallbackOutputDeviceUID: output
 assert_match 'realOutputDevice\(id: fallbackOutputDeviceUID\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must resolve the selected output before clearing recovery state.'
 assert_no_match 'expectedTermination[[:space:]]*\|\|[[:space:]]*terminatedProcess\.terminationStatus[[:space:]]*==[[:space:]]*0' 'VolDeck/Models/OutputHelperController.swift' 'Unexpected zero-exit helper terminations must still run output recovery.'
 assert_match 'didBridgeFormatChange' 'VolDeckOutputHelper/main.swift' 'Output helper must restart playback when the bridge format changes in place.'
+assert_match 'isSystemDefaultRequest\(requestedUID\), try isVolDeckDefaultOutput\(\)' 'VolDeckOutputHelper/main.swift' 'Output helper must detect when System Default has become VolDeck during playback.'
+assert_match 'selectedOutputDevice\(uid: activeOutputDevice\.uid\)' 'VolDeckOutputHelper/main.swift' 'Output helper must preserve the active real output instead of falling back to the first device when VolDeck becomes default.'
 
 assert_plist_key_absent 'AudioServerPlugIn_MachServices' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare Mach services yet.'
 assert_plist_key_absent 'AudioServerPlugIn_Network' 'VolDeckHALPlugin/Info.plist' 'M2 HAL plugin must not declare network access.'

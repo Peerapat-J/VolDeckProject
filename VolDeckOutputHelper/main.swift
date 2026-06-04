@@ -434,6 +434,18 @@ private func outputDeviceInfos(includeVolDeck: Bool = false) throws -> [OutputDe
     try outputDeviceCandidates(includeVolDeck: includeVolDeck).map(\.info)
 }
 
+private func isSystemDefaultRequest(_ requestedUID: String?) -> Bool {
+    guard let requestedUID, !requestedUID.isEmpty else {
+        return true
+    }
+
+    return requestedUID == systemDefaultOutputDeviceUID
+}
+
+private func isVolDeckDefaultOutput() throws -> Bool {
+    try outputDeviceInfos(includeVolDeck: true).contains { $0.isDefault && $0.uid == volDeckOutputDeviceUID }
+}
+
 private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedOutputDevice {
     let requestedUID = requestedUID == systemDefaultOutputDeviceUID ? nil : requestedUID
     let deviceCandidates = try outputDeviceCandidates()
@@ -447,7 +459,7 @@ private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedO
     } else {
         if let defaultCandidate = deviceCandidates.first(where: { $0.info.isDefault }) {
             selectedCandidate = defaultCandidate
-        } else if try outputDeviceInfos(includeVolDeck: true).contains(where: { $0.isDefault && $0.uid == volDeckOutputDeviceUID }),
+        } else if try isVolDeckDefaultOutput(),
                   let fallbackCandidate = deviceCandidates.first {
             selectedCandidate = fallbackCandidate
         } else {
@@ -1014,7 +1026,13 @@ private func replacementOutputDeviceIfNeeded(
     activeOutputDevice: SelectedOutputDevice,
     requestedUID: String?
 ) throws -> SelectedOutputDevice? {
-    let currentOutputDevice = try selectedOutputDevice(uid: requestedUID)
+    let currentOutputDevice: SelectedOutputDevice
+    if isSystemDefaultRequest(requestedUID), try isVolDeckDefaultOutput() {
+        currentOutputDevice = try selectedOutputDevice(uid: activeOutputDevice.uid)
+    } else {
+        currentOutputDevice = try selectedOutputDevice(uid: requestedUID)
+    }
+
     guard currentOutputDevice.uid != activeOutputDevice.uid ||
           currentOutputDevice.sampleRate != activeOutputDevice.sampleRate ||
           currentOutputDevice.channelCount != activeOutputDevice.channelCount ||
