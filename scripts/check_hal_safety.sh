@@ -59,6 +59,8 @@ assert_match 'restorePreviousOutputAfterUnexpectedTermination' 'VolDeck/Models/O
 assert_match 'AudioObjectSetPropertyData' 'VolDeck/Models/AppPreferences.swift' 'App output catalog must keep a CoreAudio default-output restore path.'
 assert_match 'System Settings > Sound' 'VolDeck/Models/OutputHelperController.swift' 'Restore failures must include manual Sound settings recovery instructions.'
 assert_match 'removeObject\(forKey: RecoveryKeys\.previousOutputDeviceID\)' 'VolDeck/Models/OutputHelperController.swift' 'Previous-output recovery state must clear stale device IDs when no real default output can be remembered.'
+assert_match 'rememberPreviousOutputForRecovery\(fallbackOutputDeviceUID: outputDeviceUID\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must fall back to the selected real output as the recovery target.'
+assert_match 'realOutputDevice\(id: fallbackOutputDeviceUID\)' 'VolDeck/Models/OutputHelperController.swift' 'Output helper controller must resolve the selected output before clearing recovery state.'
 assert_no_match 'expectedTermination[[:space:]]*\|\|[[:space:]]*terminatedProcess\.terminationStatus[[:space:]]*==[[:space:]]*0' 'VolDeck/Models/OutputHelperController.swift' 'Unexpected zero-exit helper terminations must still run output recovery.'
 assert_match 'didBridgeFormatChange' 'VolDeckOutputHelper/main.swift' 'Output helper must restart playback when the bridge format changes in place.'
 

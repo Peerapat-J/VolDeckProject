@@ -141,6 +141,15 @@ enum AudioOutputDeviceCatalog {
         return device.option
     }
 
+    static func realOutputDevice(id: String?) -> AudioOutputDeviceOption? {
+        guard let id, !id.isEmpty, id != systemDefaultOutputDeviceID,
+              let device = try? realOutputDevices().first(where: { $0.option.id == id }) else {
+            return nil
+        }
+
+        return device.option
+    }
+
     @discardableResult
     static func setDefaultOutputDevice(id: String) throws -> AudioOutputDeviceOption {
         guard id != systemDefaultOutputDeviceID else {

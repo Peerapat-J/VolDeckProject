@@ -104,7 +104,7 @@ final class OutputHelperController: ObservableObject {
         lastHeartbeat = nil
         helperLocation = helperURL.path
         expectedTermination = false
-        rememberPreviousOutputForRecovery()
+        rememberPreviousOutputForRecovery(fallbackOutputDeviceUID: outputDeviceUID)
         standardInput = inputPipe
         self.outputPipe = outputPipe
         self.errorPipe = errorPipe
@@ -301,17 +301,22 @@ final class OutputHelperController: ObservableObject {
         }
     }
 
-    private func rememberPreviousOutputForRecovery() {
-        guard let outputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice() else {
+    private func rememberPreviousOutputForRecovery(fallbackOutputDeviceUID: String? = nil) {
+        if let outputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice() {
+            rememberRecoveryTarget(outputDevice, statusPrefix: "Recovery target")
+        } else if let outputDevice = AudioOutputDeviceCatalog.realOutputDevice(id: fallbackOutputDeviceUID) {
+            rememberRecoveryTarget(outputDevice, statusPrefix: "Recovery target from selected output")
+        } else {
             defaults.removeObject(forKey: RecoveryKeys.previousOutputDeviceID)
             defaults.removeObject(forKey: RecoveryKeys.previousOutputName)
             recoveryStatus = "No real default output was available to remember"
-            return
         }
+    }
 
+    private func rememberRecoveryTarget(_ outputDevice: AudioOutputDeviceOption, statusPrefix: String) {
         defaults.set(outputDevice.id, forKey: RecoveryKeys.previousOutputDeviceID)
         defaults.set(outputDevice.displayName, forKey: RecoveryKeys.previousOutputName)
-        recoveryStatus = "Recovery target: \(outputDevice.displayName)"
+        recoveryStatus = "\(statusPrefix): \(outputDevice.displayName)"
     }
 
     private func restorePreviousOutputAfterUnexpectedTermination() -> String {
