@@ -446,6 +446,18 @@ private func isVolDeckDefaultOutput() throws -> Bool {
     try outputDeviceInfos(includeVolDeck: true).contains { $0.isDefault && $0.uid == volDeckOutputDeviceUID }
 }
 
+private func monitoredOutputDeviceUID(
+    requestedUID: String?,
+    activeOutputDeviceUID: String,
+    volDeckIsDefaultOutput: Bool
+) -> String? {
+    if isSystemDefaultRequest(requestedUID), volDeckIsDefaultOutput {
+        return activeOutputDeviceUID
+    }
+
+    return requestedUID
+}
+
 private func selectedOutputDevice(uid requestedUID: String?) throws -> SelectedOutputDevice {
     let requestedUID = requestedUID == systemDefaultOutputDeviceUID ? nil : requestedUID
     let deviceCandidates = try outputDeviceCandidates()
@@ -1026,12 +1038,13 @@ private func replacementOutputDeviceIfNeeded(
     activeOutputDevice: SelectedOutputDevice,
     requestedUID: String?
 ) throws -> SelectedOutputDevice? {
-    let currentOutputDevice: SelectedOutputDevice
-    if isSystemDefaultRequest(requestedUID), try isVolDeckDefaultOutput() {
-        currentOutputDevice = try selectedOutputDevice(uid: activeOutputDevice.uid)
-    } else {
-        currentOutputDevice = try selectedOutputDevice(uid: requestedUID)
-    }
+    let currentOutputDevice = try selectedOutputDevice(
+        uid: monitoredOutputDeviceUID(
+            requestedUID: requestedUID,
+            activeOutputDeviceUID: activeOutputDevice.uid,
+            volDeckIsDefaultOutput: isVolDeckDefaultOutput()
+        )
+    )
 
     guard currentOutputDevice.uid != activeOutputDevice.uid ||
           currentOutputDevice.sampleRate != activeOutputDevice.sampleRate ||
@@ -1102,6 +1115,39 @@ private func emitAudioBridgeSampleRateChangeProbe(_ newSampleRate: UInt64) -> In
         emit(event: "buffer", state: "error", message: "Could not probe bridge sample-rate change: \(error)")
         return 65
     }
+}
+
+private func optionalUIDArgument(_ argument: String) -> String? {
+    argument == "__nil__" ? nil : argument
+}
+
+private func emitOutputSelectionProbe(
+    requestedUIDArgument: String,
+    activeUID: String,
+    volDeckDefaultArgument: String,
+    expectedUIDArgument: String
+) -> Int32 {
+    let volDeckIsDefaultOutput: Bool
+    switch volDeckDefaultArgument {
+    case "true":
+        volDeckIsDefaultOutput = true
+    case "false":
+        volDeckIsDefaultOutput = false
+    default:
+        emit(event: "outputSelectionProbe", state: "error", message: "Invalid output-selection probe default flag")
+        return 64
+    }
+
+    let expectedUID = optionalUIDArgument(expectedUIDArgument)
+    let resolvedUID = monitoredOutputDeviceUID(
+        requestedUID: optionalUIDArgument(requestedUIDArgument),
+        activeOutputDeviceUID: activeUID,
+        volDeckIsDefaultOutput: volDeckIsDefaultOutput
+    )
+    let state = resolvedUID == expectedUID ? "ok" : "error"
+    let message = resolvedUID.map { "Resolved output monitor UID \($0)" } ?? "Resolved output monitor UID nil"
+    emit(event: "outputSelectionProbe", state: state, message: message)
+    return state == "ok" ? 0 : 65
 }
 
 private func errorMessage(_ error: Error) -> String {
@@ -1313,6 +1359,24 @@ if let probeIndex = arguments.firstIndex(of: "--buffer-probe-sample-rate-change"
     }
 
     exit(emitAudioBridgeSampleRateChangeProbe(sampleRate))
+}
+
+if let probeIndex = arguments.firstIndex(of: "--output-selection-probe") {
+    guard arguments.distance(from: probeIndex, to: arguments.endIndex) >= 5 else {
+        emit(event: "outputSelectionProbe", state: "error", message: "Missing --output-selection-probe arguments")
+        exit(64)
+    }
+
+    let requestedIndex = arguments.index(after: probeIndex)
+    let activeIndex = arguments.index(requestedIndex, offsetBy: 1)
+    let defaultIndex = arguments.index(activeIndex, offsetBy: 1)
+    let expectedIndex = arguments.index(defaultIndex, offsetBy: 1)
+    exit(emitOutputSelectionProbe(
+        requestedUIDArgument: arguments[requestedIndex],
+        activeUID: arguments[activeIndex],
+        volDeckDefaultArgument: arguments[defaultIndex],
+        expectedUIDArgument: arguments[expectedIndex]
+    ))
 }
 
 if let readIndex = arguments.firstIndex(of: "--buffer-read-once") {

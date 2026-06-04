@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 @MainActor
@@ -302,15 +303,23 @@ final class OutputHelperController: ObservableObject {
     }
 
     private func rememberPreviousOutputForRecovery(fallbackOutputDeviceUID: String? = nil) {
-        if let outputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice() {
-            rememberRecoveryTarget(outputDevice, statusPrefix: "Recovery target")
-        } else if let outputDevice = AudioOutputDeviceCatalog.realOutputDevice(id: fallbackOutputDeviceUID) {
-            rememberRecoveryTarget(outputDevice, statusPrefix: "Recovery target from selected output")
+        let defaultOutputDevice = AudioOutputDeviceCatalog.currentDefaultRealOutputDevice()
+        let fallbackOutputDevice = AudioOutputDeviceCatalog.realOutputDevice(id: fallbackOutputDeviceUID)
+        if let recoveryTarget = Self.recoveryTarget(defaultOutputDevice: defaultOutputDevice, fallbackOutputDevice: fallbackOutputDevice) {
+            let statusPrefix = defaultOutputDevice == nil ? "Recovery target from selected output" : "Recovery target"
+            rememberRecoveryTarget(recoveryTarget, statusPrefix: statusPrefix)
         } else {
             defaults.removeObject(forKey: RecoveryKeys.previousOutputDeviceID)
             defaults.removeObject(forKey: RecoveryKeys.previousOutputName)
             recoveryStatus = "No real default output was available to remember"
         }
+    }
+
+    static func recoveryTarget(
+        defaultOutputDevice: AudioOutputDeviceOption?,
+        fallbackOutputDevice: AudioOutputDeviceOption?
+    ) -> AudioOutputDeviceOption? {
+        defaultOutputDevice ?? fallbackOutputDevice
     }
 
     private func rememberRecoveryTarget(_ outputDevice: AudioOutputDeviceOption, statusPrefix: String) {

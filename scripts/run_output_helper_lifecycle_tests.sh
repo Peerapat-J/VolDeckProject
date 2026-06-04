@@ -31,6 +31,18 @@ printf '%s\n' "$device_output" | /usr/bin/grep '"event":"outputDevices"' >/dev/n
 printf '%s\n' "$device_output" | /usr/bin/grep '"state":"ok"' >/dev/null
 printf '%s\n' "$device_output" | /usr/bin/grep '"devices":\[' >/dev/null
 
+selection_probe_output="$("$helper" --output-selection-probe "__system_default__" "active-real-output" true "active-real-output")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
+selection_probe_output="$("$helper" --output-selection-probe "__system_default__" "active-real-output" false "__system_default__")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
+selection_probe_output="$("$helper" --output-selection-probe "explicit-real-output" "active-real-output" true "explicit-real-output")"
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"event":"outputSelectionProbe"' >/dev/null
+printf '%s\n' "$selection_probe_output" | /usr/bin/grep '"state":"ok"' >/dev/null
+
 helper_run_output=""
 
 run_helper_with_stop() {

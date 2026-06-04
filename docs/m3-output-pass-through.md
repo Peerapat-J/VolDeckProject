@@ -182,6 +182,7 @@ Keep the M2 gates running while M3 changes the driver/helper path:
 xcodebuild -quiet -project VolDeck.xcodeproj -target VolDeckHALPlugin -configuration Debug CODE_SIGNING_ALLOWED=NO build
 sh scripts/check_hal_safety.sh
 sh scripts/run_hal_contract_tests.sh
+sh scripts/run_app_recovery_behavior_tests.sh
 sh scripts/run_audio_bridge_tests.sh
 sh scripts/run_output_helper_lifecycle_tests.sh
 /path/to/VolDeckOutputHelper --list-output-devices
