@@ -27,6 +27,18 @@ jobs:
       - name: List project schemes
         run: xcodebuild -list -project VolDeck.xcodeproj
 
+      - name: Run source hygiene checks
+        run: sh scripts/check_source_hygiene.sh
+
+      - name: Install SwiftLint
+        run: |
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+
+      - name: Run SwiftLint hygiene rules
+        run: sh scripts/run_swiftlint.sh
+
       - name: Run HAL safety guard
         run: sh scripts/check_hal_safety.sh
 

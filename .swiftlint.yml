@@ -1,0 +1,16 @@
+included:
+  - VolDeck
+  - VolDeckAppBehaviorTests
+  - VolDeckOutputHelper
+
+only_rules:
+  - duplicate_imports
+  - force_cast
+  - force_try
+  - implicitly_unwrapped_optional
+  - todo
+  - trailing_whitespace
+
+trailing_whitespace:
+  ignores_empty_lines: false
+  ignores_comments: false
